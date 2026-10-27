@@ -29,6 +29,7 @@ function numberOpt(name: string, fallback: number): number {
 export const env = {
   NODE_ENV: optional('NODE_ENV', 'development'),
   PORT: numberOpt('PORT', 3000),
+  RATE_LIMIT_PER_MIN: numberOpt('VL_RATE_LIMIT_PER_MIN', 900),
   HOST: optional('HOST', '0.0.0.0'),
   PUBLIC_URL: optional('PUBLIC_URL', 'http://localhost:3000'),
 

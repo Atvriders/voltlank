@@ -12,6 +12,7 @@ export interface UserPublic {
   passkeyEnabled: boolean;
   timezone: string;
   units: 'metric' | 'imperial';
+  theme: string;
   demoEnabled: boolean;
   presentationMode: boolean;
   createdAt: string;

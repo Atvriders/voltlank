@@ -63,6 +63,7 @@ export function publicUser(u: {
     passkeyEnabled: false,
     timezone: u.timezone,
     units: u.units === 'imperial' ? 'imperial' : 'metric',
+    theme: u.theme,
     demoEnabled: u.demoEnabled,
     presentationMode: u.presentationMode,
     createdAt: u.createdAt.toISOString(),

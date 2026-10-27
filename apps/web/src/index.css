@@ -1,0 +1,222 @@
+@import 'tailwindcss';
+
+/* VoltLink design tokens — five original themes. */
+@theme inline {
+  --color-canvas: var(--vl-canvas);
+  --color-panel: var(--vl-panel);
+  --color-panel2: var(--vl-panel2);
+  --color-ink: var(--vl-ink);
+  --color-subtle: var(--vl-subtle);
+  --color-faint: var(--vl-faint);
+  --color-line: var(--vl-line);
+  --color-accent: var(--vl-accent);
+  --color-accent2: var(--vl-accent2);
+  --color-onaccent: var(--vl-onaccent);
+  --color-ok: var(--vl-ok);
+  --color-warn: var(--vl-warn);
+  --color-danger: var(--vl-danger);
+  --color-info: var(--vl-info);
+  --color-charging: var(--vl-charging);
+  --color-focus: var(--vl-focus);
+}
+
+:root,
+[data-theme='voltlank-dark'] {
+  --vl-canvas: #0b1017;
+  --vl-panel: #121a24;
+  --vl-panel2: #1a2431;
+  --vl-ink: #e8eef5;
+  --vl-subtle: #9fb0c3;
+  --vl-faint: #5d6c7e;
+  --vl-line: #22303f;
+  --vl-accent: #0ea5e9;
+  --vl-accent2: #22d3ee;
+  --vl-onaccent: #ffffff;
+  --vl-ok: #34d399;
+  --vl-warn: #fbbf24;
+  --vl-danger: #f87171;
+  --vl-info: #60a5fa;
+  --vl-charging: #4ade80;
+  --vl-focus: #38bdf8;
+  color-scheme: dark;
+}
+
+[data-theme='voltlank-light'] {
+  --vl-canvas: #f3f6f9;
+  --vl-panel: #ffffff;
+  --vl-panel2: #e9eef3;
+  --vl-ink: #15202b;
+  --vl-subtle: #4a5b6d;
+  --vl-faint: #8293a5;
+  --vl-line: #d6dee6;
+  --vl-accent: #0284c7;
+  --vl-accent2: #0e7490;
+  --vl-onaccent: #ffffff;
+  --vl-ok: #059669;
+  --vl-warn: #b45309;
+  --vl-danger: #dc2626;
+  --vl-info: #2563eb;
+  --vl-charging: #16a34a;
+  --vl-focus: #0284c7;
+  color-scheme: light;
+}
+
+[data-theme='fleet-ops'] {
+  --vl-canvas: #0d1410;
+  --vl-panel: #141d16;
+  --vl-panel2: #1c291f;
+  --vl-ink: #e6f0e8;
+  --vl-subtle: #9db5a4;
+  --vl-faint: #5f7665;
+  --vl-line: #243426;
+  --vl-accent: #65a30d;
+  --vl-accent2: #a3e635;
+  --vl-onaccent: #0b1017;
+  --vl-ok: #4ade80;
+  --vl-warn: #facc15;
+  --vl-danger: #fb7185;
+  --vl-info: #7dd3fc;
+  --vl-charging: #86efac;
+  --vl-focus: #a3e635;
+  color-scheme: dark;
+}
+
+[data-theme='high-contrast'] {
+  --vl-canvas: #000000;
+  --vl-panel: #0a0a0a;
+  --vl-panel2: #161616;
+  --vl-ink: #ffffff;
+  --vl-subtle: #f0f0f0;
+  --vl-faint: #c0c0c0;
+  --vl-line: #5a5a5a;
+  --vl-accent: #00e5ff;
+  --vl-accent2: #00e5ff;
+  --vl-onaccent: #000000;
+  --vl-ok: #00ff88;
+  --vl-warn: #ffee00;
+  --vl-danger: #ff3b3b;
+  --vl-info: #40a6ff;
+  --vl-charging: #00ff88;
+  --vl-focus: #ffffff;
+  color-scheme: dark;
+}
+
+[data-theme='colorblind-safe'] {
+  --vl-canvas: #fbfaf7;
+  --vl-panel: #ffffff;
+  --vl-panel2: #f0ece2;
+  --vl-ink: #1a1a1a;
+  --vl-subtle: #4d4d4d;
+  --vl-faint: #7a7a7a;
+  --vl-line: #c8c4b8;
+  --vl-accent: #0072b2;
+  --vl-accent2: #0072b2;
+  --vl-onaccent: #ffffff;
+  --vl-ok: #009e73;
+  --vl-warn: #e69f00;
+  --vl-danger: #d55e00;
+  --vl-info: #56b4e9;
+  --vl-charging: #009e73;
+  --vl-focus: #0072b2;
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--vl-canvas);
+  color: var(--vl-ink);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--vl-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vl-line) transparent;
+}
+
+/* MapLibre popups and controls inherit theme. */
+.maplibregl-popup-content {
+  background: var(--vl-panel);
+  color: var(--vl-ink);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.35);
+}
+.maplibregl-popup-tip {
+  border-top-color: var(--vl-panel) !important;
+  border-bottom-color: var(--vl-panel) !important;
+}
+.maplibregl-ctrl-group {
+  background: var(--vl-panel);
+  border: 1px solid var(--vl-line);
+}
+.maplibregl-ctrl-group button {
+  filter: none;
+}
+.maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(1) brightness(1.6);
+}
+[data-theme='voltlank-light'] .maplibregl-ctrl button .maplibregl-ctrl-icon,
+[data-theme='colorblind-safe'] .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: none;
+}
+
+/* Utility helpers */
+.card {
+  background: var(--vl-panel);
+  border: 1px solid var(--vl-line);
+  border-radius: 14px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--vl-line);
+  background: var(--vl-panel2);
+}
+
+@keyframes vl-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.pulse {
+  animation: vl-pulse 1.8s ease-in-out infinite;
+}

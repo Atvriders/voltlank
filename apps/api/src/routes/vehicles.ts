@@ -59,6 +59,26 @@ vehiclesRouter.get('/', async (req, res) => {
   res.json({ data: vehicles.map((v) => ({ ...toVehicleWithState(v), groupIds: groups.get(v.id) ?? [] })) });
 });
 
+// ---- Privacy zones ----
+
+vehiclesRouter.get('/privacy-zones', async (req, res) => {
+  const rows = await prisma.privacyZone.findMany({ where: { userId: req.user!.id }, orderBy: { name: 'asc' } });
+  res.json({ data: rows });
+});
+
+const privacySchema = z.object({ name: z.string().min(1).max(60), lat: z.number(), lon: z.number(), radiusM: z.number().min(50).max(10000) });
+
+vehiclesRouter.post('/privacy-zones', async (req, res) => {
+  const parsed = privacySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Privacy zone needs name, lat, lon, radiusM.' } });
+    return;
+  }
+  const z = await prisma.privacyZone.create({ data: { userId: req.user!.id, ...parsed.data } });
+  res.status(201).json({ data: z });
+});
+
+
 vehiclesRouter.get('/:id', async (req, res) => {
   const vehicle = await loadVehicleForUser(req.params.id, req.user!.id, req.user!.role);
   res.json({ data: toVehicleWithState(vehicle) });
@@ -230,25 +250,6 @@ vehiclesRouter.delete('/geofences/all/:id', async (req, res) => {
   }
   await prisma.geofence.delete({ where: { id: row.id } });
   res.json({ data: { ok: true } });
-});
-
-// ---- Privacy zones ----
-
-vehiclesRouter.get('/privacy-zones', async (req, res) => {
-  const rows = await prisma.privacyZone.findMany({ where: { userId: req.user!.id }, orderBy: { name: 'asc' } });
-  res.json({ data: rows });
-});
-
-const privacySchema = z.object({ name: z.string().min(1).max(60), lat: z.number(), lon: z.number(), radiusM: z.number().min(50).max(10000) });
-
-vehiclesRouter.post('/privacy-zones', async (req, res) => {
-  const parsed = privacySchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: { code: 'VALIDATION', message: 'Privacy zone needs name, lat, lon, radiusM.' } });
-    return;
-  }
-  const z = await prisma.privacyZone.create({ data: { userId: req.user!.id, ...parsed.data } });
-  res.status(201).json({ data: z });
 });
 
 vehiclesRouter.patch('/privacy-zones/:id', async (req, res) => {

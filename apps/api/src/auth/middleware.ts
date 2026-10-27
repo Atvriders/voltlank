@@ -44,6 +44,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   const session = await prisma.userSession.findUnique({ where: { id: payload.sid } });
+  if (process.env.VL_SESSION_DEBUG) {
+    console.log('[session-debug]', payload.sid, 'found=', !!session, 'revoked=', session?.revokedAt, 'hashMatch=', session?.tokenHash === tokenHash(token), 'expiry=', session?.expiresAt?.toISOString());
+  }
   if (!session || session.revokedAt || session.expiresAt < new Date() || session.tokenHash !== tokenHash(token)) {
     res.status(401).json({ error: { code: 'SESSION_REVOKED', message: 'This session was revoked or expired.' } });
     return;

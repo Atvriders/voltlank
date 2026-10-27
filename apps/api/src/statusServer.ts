@@ -56,7 +56,13 @@ async function main(): Promise<void> {
   const spaDir = path.resolve(process.cwd(), 'web-dist');
   if (fs.existsSync(spaDir)) {
     app.use(express.static(spaDir, { index: false, maxAge: '7d' }));
-    app.get('*', (_req, res) => res.sendFile(path.join(spaDir, 'index.html')));
+    app.use((req, res, next) => {
+      if (req.method !== 'GET') {
+        next();
+        return;
+      }
+      res.sendFile(path.join(spaDir, 'index.html'));
+    });
   } else {
     app.get('/', (_req, res) => res.send('VoltLink status process — SPA not built.'));
   }

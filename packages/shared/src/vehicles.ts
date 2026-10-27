@@ -130,6 +130,8 @@ export interface VehicleState {
   // Lights / security
   sentryMode?: boolean;
   alarmState?: 'off' | 'armed' | 'triggered';
+  /** Transient client-side signal while a flash-lights command is pending. */
+  flashLightsBlink?: boolean;
   valetMode?: boolean;
   speedLimitMode?: { active: boolean; limitKmh?: number };
   // Location

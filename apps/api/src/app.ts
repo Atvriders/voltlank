@@ -52,12 +52,13 @@ export function buildApp(opts: { serveSpa?: boolean } = {}): express.Express {
   app.use(express.json({ limit: '2mb' }));
   app.use(cookieParser());
   app.use(
+    '/api',
     rateLimit({
       windowMs: 60_000,
-      limit: 300,
+      limit: env.RATE_LIMIT_PER_MIN,
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (req) => req.path.startsWith('/api/v1/realtime'),
+      skip: (req) => req.originalUrl.startsWith('/api/v1/realtime'),
     }),
   );
   app.use('/api', csrf);
@@ -108,8 +109,8 @@ export function buildApp(opts: { serveSpa?: boolean } = {}): express.Express {
     const spaDir = path.resolve(process.cwd(), 'web-dist');
     if (fs.existsSync(spaDir)) {
       app.use(express.static(spaDir, { index: false, maxAge: '7d' }));
-      app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/api')) {
+      app.use((req, res, next) => {
+        if (req.path.startsWith('/api') || req.method !== 'GET') {
           next();
           return;
         }

@@ -1,0 +1,170 @@
+import { z } from 'zod';
+
+export const NetKind = z.enum(['weekly', 'impromptu']);
+export type NetKind = z.infer<typeof NetKind>;
+
+export const ScriptCategory = z.enum(['weekly', 'general', 'impromptu']);
+export type ScriptCategory = z.infer<typeof ScriptCategory>;
+
+/**
+ * Default reminder lead times (in minutes-before-net-start) applied to a new
+ * net when none are supplied. Matches the legacy global default of 4h + 30m.
+ */
+export const DEFAULT_REMINDER_MINUTES: readonly number[] = [240, 30] as const;
+
+/**
+ * Per-net reminder lead times. Each entry is a positive integer number of
+ * minutes before the net's scheduled start at which to fire a reminder. An
+ * empty array means "no reminders for this net". Capped at 10 entries; each
+ * value is clamped 1..10080 (a week).
+ */
+export const ReminderMinutes = z
+  .array(z.number().int().positive().max(10080))
+  .max(10)
+  .transform((arr) => {
+    // Dedupe, sort descending (earliest reminder first chronologically), then
+    // hand back a plain number[].
+    const unique = Array.from(new Set(arr.map((n) => Math.floor(n))));
+    unique.sort((a, b) => b - a);
+    return unique;
+  });
+export type ReminderMinutes = z.infer<typeof ReminderMinutes>;
+
+/**
+ * Parse a stored JSON-encoded `reminderMinutes` column from the DB into a
+ * sanitized `number[]`. Tolerant of nulls and malformed JSON so a bad row
+ * never crashes the scheduler.
+ */
+export function parseReminderMinutes(raw: string | null | undefined): number[] {
+  if (raw == null) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return ReminderMinutes.parse(parsed);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * True when the runtime's `Intl` accepts `value` as an IANA timezone id.
+ *
+ * This is the only definition of "valid timezone" that matters here: every
+ * scheduler resolves a net's wall clock with
+ * `new Intl.DateTimeFormat(..., { timeZone })`, which throws a RangeError on
+ * anything it doesn't recognise. A zone that fails this check is a zone that
+ * blows up the auto-open / auto-start / reminder ticks, so it must never
+ * reach the database.
+ *
+ * Rejects the shapes people actually type into the timezone box:
+ * abbreviations ("CDT", "EST"), friendly names ("Eastern"), raw offsets
+ * ("UTC-6"), and values pasted with surrounding whitespace
+ * (" America/Chicago ").
+ */
+export function isValidTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Net timezone as accepted on input. Validated (not normalized) so the error
+ * is actionable and the stored value is exactly what the operator confirmed —
+ * silently trimming or remapping would hide a typo that shifts a net by hours.
+ */
+const timezone = z
+  .string()
+  .min(1)
+  .refine(isValidTimezone, { message: 'Must be an IANA timezone like America/Chicago' });
+
+const baseNetFields = {
+  name: z.string().min(1).max(120),
+  repeaterId: z.string().min(1),
+  theme: z.string().max(200).nullable().optional(),
+  scriptMd: z.string().max(20000).nullable().optional(),
+  scriptCategory: ScriptCategory.optional(),
+  reminderMinutes: ReminderMinutes.optional(),
+  active: z.boolean().optional(),
+  linkedRepeaterIds: z.array(z.string()).max(30).optional(),
+};
+
+const dayOfWeek = z.number().int().gte(0).lte(6);
+const startLocal = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:mm');
+
+/**
+ * Net create/update payload. Weekly nets require dayOfWeek/startLocal/timezone;
+ * impromptu nets may omit them (the API substitutes scheduling sentinels).
+ */
+const netInputObject = z.object({
+  ...baseNetFields,
+  kind: NetKind.optional(),
+  dayOfWeek: dayOfWeek.optional(),
+  startLocal: startLocal.optional(),
+  timezone: timezone.optional(),
+});
+
+export const NetInput = netInputObject.superRefine((val, ctx) => {
+  if ((val.kind ?? 'weekly') === 'weekly') {
+    if (val.dayOfWeek === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['dayOfWeek'],
+        message: 'Required for weekly nets',
+      });
+    }
+    if (val.startLocal === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['startLocal'],
+        message: 'Required for weekly nets',
+      });
+    }
+    if (val.timezone === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['timezone'],
+        message: 'Required for weekly nets',
+      });
+    }
+  }
+});
+export type NetInput = z.infer<typeof NetInput>;
+
+/**
+ * Partial update shape for PATCH /api/nets/:id. Every field is optional and
+ * the weekly-required superRefine is intentionally dropped — callers can send
+ * just the columns they want to change without re-fetching the whole net.
+ */
+export const NetUpdate = netInputObject.partial();
+export type NetUpdate = z.infer<typeof NetUpdate>;
+
+export const Net = z.object({
+  ...baseNetFields,
+  id: z.string(),
+  kind: NetKind,
+  scriptCategory: ScriptCategory,
+  reminderMinutes: z.array(z.number().int()).default([]),
+  dayOfWeek: z.number().int(),
+  startLocal: z.string(),
+  // Deliberately NOT the validated `timezone` schema: this is the response
+  // shape, and rows written before the input-side refinement existed may hold
+  // a bad zone. Reading such a net must still work (that's how an officer
+  // finds and fixes it) — the write path is where bad zones get rejected.
+  timezone: z.string(),
+  active: z.boolean(),
+});
+export type Net = z.infer<typeof Net>;
+
+/**
+ * Body of PATCH /api/sessions/:id/checkins/order — the session's complete
+ * live check-in id list, in the order the log should read. Capped because a
+ * single net's log is tens of rows, not thousands, and an unbounded array
+ * would be a free way to make the server build a huge transaction.
+ */
+export const ReorderCheckInsInput = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1).max(1000),
+});
+export type ReorderCheckInsInput = z.infer<typeof ReorderCheckInsInput>;

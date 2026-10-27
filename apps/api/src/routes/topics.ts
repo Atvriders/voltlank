@@ -1,0 +1,126 @@
+import { Router } from 'express';
+import type { z } from 'zod';
+import { PrismaClient } from '@prisma/client';
+import { TopicSuggestionInput, UpdateTopicStatusInput } from '@hna/shared';
+import { validateBody } from '../middleware/validate.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import { HttpError } from '../middleware/error.js';
+import { asyncHandler } from '../middleware/async.js';
+
+export function topicsRouter(prisma: PrismaClient): Router {
+  const router = Router();
+
+  router.get(
+    '/',
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+      const rows = await prisma.topicSuggestion.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: { createdBy: { select: { callsign: true, name: true } } },
+      });
+      res.json(
+        rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          details: r.details,
+          status: r.status,
+          createdAt: r.createdAt.toISOString(),
+          createdById: r.createdById,
+          createdByCallsign: r.createdBy.callsign,
+          createdByName: r.createdBy.name,
+        })),
+      );
+    }),
+  );
+
+  // GET /api/topics/recommended — the OPEN suggestion queue for the prep-view
+  // topic picker. Returns OPEN suggestions oldest-first (FIFO so the queue
+  // drains fairly), with `recommended: true` flagged on the single oldest one.
+  // USED / DISMISSED suggestions are excluded. Empty array when none are OPEN.
+  // Registered before POST '/' (both are exact paths, but keep the read route
+  // grouped with the other GETs).
+  router.get(
+    '/recommended',
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+      const rows = await prisma.topicSuggestion.findMany({
+        where: { status: 'OPEN' },
+        orderBy: { createdAt: 'asc' },
+        include: { createdBy: { select: { callsign: true, name: true } } },
+      });
+      res.json(
+        rows.map((r, i) => ({
+          id: r.id,
+          title: r.title,
+          details: r.details,
+          status: r.status,
+          createdAt: r.createdAt.toISOString(),
+          createdById: r.createdById,
+          createdByCallsign: r.createdBy.callsign,
+          createdByName: r.createdBy.name,
+          // Only the oldest OPEN suggestion (index 0) is the recommendation.
+          recommended: i === 0,
+        })),
+      );
+    }),
+  );
+
+  router.post(
+    '/',
+    requireAuth,
+    validateBody(TopicSuggestionInput),
+    asyncHandler(async (req, res) => {
+      const body = req.body as z.infer<typeof TopicSuggestionInput>;
+      const created = await prisma.topicSuggestion.create({
+        data: {
+          title: body.title,
+          details: body.details ?? null,
+          createdById: req.user!.id,
+        },
+      });
+      res.status(201).json(created);
+    }),
+  );
+
+  // Marking a suggestion USED/DISMISSED is part of running a net (a control op
+  // picks a topic from the queue), so it drops to NET_CONTROL. Officers/admins
+  // still outrank NET_CONTROL and pass this gate.
+  router.patch(
+    '/:id/status',
+    requireRole('NET_CONTROL'),
+    validateBody(UpdateTopicStatusInput),
+    asyncHandler(async (req, res) => {
+      try {
+        const updated = await prisma.topicSuggestion.update({
+          where: { id: req.params.id },
+          data: {
+            status: (req.body as z.infer<typeof UpdateTopicStatusInput>).status,
+          },
+        });
+        res.json(updated);
+      } catch {
+        throw new HttpError(404, 'NOT_FOUND', 'Topic not found');
+      }
+    }),
+  );
+
+  router.delete(
+    '/:id',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const t = await prisma.topicSuggestion.findUnique({
+        where: { id: req.params.id },
+      });
+      if (!t) throw new HttpError(404, 'NOT_FOUND', 'Topic not found');
+      const me = req.user!;
+      const isOfficer = me.role === 'OFFICER' || me.role === 'ADMIN';
+      if (!isOfficer && (t.createdById !== me.id || t.status !== 'OPEN')) {
+        throw new HttpError(403, 'FORBIDDEN', 'Cannot delete this topic');
+      }
+      await prisma.topicSuggestion.delete({ where: { id: t.id } });
+      res.status(204).end();
+    }),
+  );
+
+  return router;
+}

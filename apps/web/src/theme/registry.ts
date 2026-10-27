@@ -1,0 +1,64 @@
+export interface Theme {
+  slug: string;
+  name: string;
+  shortName: string;
+  colors: Record<string, string>;
+  darkColors?: Record<string, string>;
+  font: { display: string; body: string };
+  logo: { file: string; alt: string; maxHeightPx: number };
+  logoUrl: string;
+  uploadedLogoUrl?: string | null;
+  attribution?: string;
+}
+
+const themeJsons = import.meta.glob('@themes/*/theme.json', { eager: true }) as Record<
+  string,
+  { default: Omit<Theme, 'logoUrl'> }
+>;
+const logos = import.meta.glob('@themes/*/logo.svg', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+export const themes: Theme[] = Object.entries(themeJsons)
+  .map(([jsonPath, mod]) => {
+    const dir = jsonPath.replace(/\/theme\.json$/, '');
+    const logoUrl = logos[`${dir}/logo.svg`] ?? '';
+    return { ...(mod.default as Omit<Theme, 'logoUrl'>), logoUrl };
+  })
+  .sort((a, b) =>
+    a.slug === 'default' ? -1 : b.slug === 'default' ? 1 : a.name.localeCompare(b.name),
+  );
+
+export function themeBySlug(slug: string | null | undefined): Theme {
+  const found =
+    themes.find((t) => t.slug === slug) ??
+    themes.find((t) => t.slug === 'default') ??
+    themes[0];
+  if (!found) {
+    throw new Error('No themes registered');
+  }
+  return found;
+}
+
+export function effectiveLogoUrl(t: Theme): string {
+  return t.uploadedLogoUrl ?? t.logoUrl;
+}
+
+export async function loadThemesFromApi(): Promise<Theme[]> {
+  try {
+    const res = await fetch('/api/themes', { credentials: 'include' });
+    if (!res.ok) return themes;
+    const remote = (await res.json()) as Array<{
+      slug: string;
+      uploadedLogoUrl: string | null;
+    }>;
+    return themes.map((base) => {
+      const r = remote.find((x) => x.slug === base.slug);
+      return r ? { ...base, uploadedLogoUrl: r.uploadedLogoUrl } : base;
+    });
+  } catch {
+    return themes;
+  }
+}

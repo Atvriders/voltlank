@@ -1,0 +1,94 @@
+/*
+ * Reset + base typographic baseline. The "radio console" identity lives
+ * in ui.css; this file just establishes a clean box model and font defaults.
+ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-fg);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'ss01';
+  font-optical-sizing: auto;
+  line-height: 1.55;
+  overflow-x: hidden;
+}
+
+button { font: inherit; color: inherit; }
+
+/* Media + embeds: never push past their container — every page sweep
+ * relies on this so a wide image, SVG, or iframe inside a flex/grid
+ * child can't force horizontal scroll on the page. */
+img, svg, iframe, video { max-width: 100%; height: auto; display: block; }
+svg { display: inline-block; }
+table { width: 100%; }
+
+/* Long URLs / callsigns inside <pre> shouldn't trigger horizontal
+ * page scroll — wrap by default. Page-level <pre> blocks that NEED
+ * to scroll horizontally opt in via a `.hna-pre-scroll` wrapper. */
+pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Page headings: industrial signage face, sentence-stripped uppercase elsewhere */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0 0 var(--space-3) 0;
+  color: var(--color-fg);
+  text-transform: uppercase;
+}
+h1 { font-size: 2rem; font-weight: 800; letter-spacing: 0.03em; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.15rem; }
+h4 { font-size: 1rem; }
+
+code, kbd, pre, .hna-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Existing helpers used by pages — preserved with the new vocabulary. */
+.hna-callsign {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+.hna-freq {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.hna-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--color-fg-muted);
+}
+.hna-dot-leader {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.hna-dot-leader::before {
+  content: "";
+  flex: 1;
+  margin: 0 4px;
+  border-bottom: 1px dotted currentColor;
+  opacity: 0.25;
+  transform: translateY(-3px);
+}

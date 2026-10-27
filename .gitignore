@@ -1,0 +1,41 @@
+node_modules/
+dist/
+build/
+coverage/
+# Real secrets. `.env.example` is the only one that belongs in the repo, so it
+# is re-included explicitly. `.devenv` is the file README's "Local development"
+# section tells you to write your JWT_SECRET into — it is NOT covered by the
+# `.env*` patterns, so it needs its own line or the secret becomes committable.
+.env
+.env.*
+!.env.example
+.devenv
+*.log
+.DS_Store
+apps/api/prisma/dev.db*
+apps/api/test-*.db*
+# Catch-all for SQLite files anywhere in the tree. The two patterns above only
+# cover the dev database and the test fixtures by name, so a scratch database
+# created anywhere else (an ad-hoc migration check, a restored snapshot) showed
+# up as an ordinary new file. This repo tracks no database of any kind — and a
+# committed one would be real member data (names, callsigns, e-mail addresses,
+# check-in history) published to a public repo.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/
+
+# Deployment compose files. The tracked docker-compose.yml is a TEMPLATE: it
+# resolves JWT_SECRET from the environment and refuses to start without one,
+# precisely so no signing key is ever published here. An operator running a
+# real server may prefer a self-contained copy with the values inline — these
+# names keep that copy out of the repo. A committed signing key would let
+# anyone mint an ADMIN session for that club.
+docker-compose.server.yml
+docker-compose.deploy.yml
+docker-compose.local.yml
+docker-compose.*.local.yml
+docker-compose.override.yml

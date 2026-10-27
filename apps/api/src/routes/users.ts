@@ -1,0 +1,115 @@
+// NOTE: callsigns are IMMUTABLE after registration. No endpoint allows
+// changing a user's callsign. N0CALL placeholder stays N0CALL.
+import { Router } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
+import { UpdateMeInput, UpdateRoleInput, PublicUser } from '@hna/shared';
+import { validateBody } from '../middleware/validate.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import { HttpError } from '../middleware/error.js';
+import { asyncHandler } from '../middleware/async.js';
+
+const publicSelect = {
+  id: true,
+  email: true,
+  name: true,
+  callsign: true,
+  role: true,
+  collegeSlug: true,
+} as const;
+
+export function usersRouter(prisma: PrismaClient): Router {
+  const router = Router();
+
+  router.patch('/me', requireAuth, validateBody(UpdateMeInput.strict()), asyncHandler(async (req, res) => {
+    const body = req.body as z.infer<typeof UpdateMeInput>;
+    const updated = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: {
+        name: body.name ?? undefined,
+        collegeSlug: body.collegeSlug === undefined ? undefined : body.collegeSlug,
+      },
+      select: publicSelect,
+    });
+    res.json(PublicUser.parse(updated));
+  }));
+
+  router.get('/directory', requireAuth, asyncHandler(async (_req, res) => {
+    const list = await prisma.user.findMany({
+      select: { callsign: true, name: true },
+      orderBy: { callsign: 'asc' },
+    });
+    res.json(list);
+  }));
+
+  // Roster of users eligible to be Net Control. Used by the active-session
+  // "change control" picker. Gated to NET_CONTROL+ (the run-the-net set) since
+  // reassigning control is part of running the net; the PATCH that applies the
+  // change is likewise NET_CONTROL. Any member can *be* Net Control, so the
+  // candidate list is the full roster.
+  router.get('/control-candidates', requireRole('NET_CONTROL'), asyncHandler(async (_req, res) => {
+    const list = await prisma.user.findMany({
+      select: { id: true, callsign: true, name: true, role: true },
+      orderBy: { callsign: 'asc' },
+    });
+    res.json(list);
+  }));
+
+  router.get('/', requireRole('ADMIN'), asyncHandler(async (_req, res) => {
+    const users = await prisma.user.findMany({
+      select: publicSelect,
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(users.map((u) => PublicUser.parse(u)));
+  }));
+
+  router.delete('/:id', requireRole('ADMIN'), asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (id === req.user!.id) {
+      throw new HttpError(400, 'VALIDATION', 'Cannot delete your own account');
+    }
+    try {
+      await prisma.user.delete({ where: { id } });
+      res.status(204).end();
+    } catch {
+      throw new HttpError(404, 'NOT_FOUND', 'User not found');
+    }
+  }));
+
+  router.patch(
+    '/:id',
+    requireRole('ADMIN'),
+    validateBody(
+      z.object({
+        collegeSlug: z.string().max(40).nullable().optional(),
+      }).strict(),
+    ),
+    asyncHandler(async (req, res) => {
+      try {
+        const updated = await prisma.user.update({
+          where: { id: req.params.id },
+          data: { collegeSlug: (req.body as { collegeSlug?: string | null }).collegeSlug },
+          select: publicSelect,
+        });
+        res.json(PublicUser.parse(updated));
+      } catch {
+        throw new HttpError(404, 'NOT_FOUND', 'User not found');
+      }
+    }),
+  );
+
+  router.patch('/:id/role', requireRole('ADMIN'), validateBody(UpdateRoleInput), asyncHandler(async (req, res) => {
+    try {
+      const updated = await prisma.user.update({
+        where: { id: req.params.id },
+        data: { role: (req.body as z.infer<typeof UpdateRoleInput>).role },
+        select: publicSelect,
+      });
+      res.json(PublicUser.parse(updated));
+    } catch {
+      throw new HttpError(404, 'NOT_FOUND', 'User not found');
+    }
+  }));
+
+  return router;
+}

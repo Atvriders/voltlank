@@ -1,0 +1,352 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String       @id @default(cuid())
+  callsign           String
+  name               String
+  email              String       @unique
+  passwordHash       String
+  role               String       @default("MEMBER")
+  collegeSlug        String?
+  createdAt          DateTime     @default(now())
+  /// Last time this user pinged the presence heartbeat; null if never seen.
+  lastSeenAt         DateTime?
+  checkIns           CheckIn[]    @relation("CheckInSubject")
+  createdCheckIns    CheckIn[]    @relation("CheckInCreator")
+  controlledSessions NetSession[] @relation("ControlOp")
+  suggestions        TopicSuggestion[] @relation("TopicCreator")
+  messages           SessionMessage[] @relation("MessageAuthor")
+  reactions          SessionMessageReaction[] @relation("ReactionAuthor")
+  scripts            NetScript[] @relation("ScriptAuthor")
+
+  @@index([callsign])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Reusable script in the saved-script library. Officers can pick from these
+/// in NetEditModal instead of pasting the same boilerplate into every net.
+/// Soft-deleted via `deletedAt` so picks-by-id from older nets degrade safely.
+model NetScript {
+  id          String   @id @default(cuid())
+  title       String
+  /// 'weekly' | 'general' | 'impromptu' — mirrors Net.scriptCategory
+  category    String   @default("general")
+  /// Markdown body, capped at 20000 chars to match Net.scriptMd
+  body        String
+  createdById String?
+  createdBy   User?    @relation("ScriptAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([deletedAt])
+  @@index([category])
+}
+
+model TopicSuggestion {
+  id          String   @id @default(cuid())
+  title       String
+  details     String?
+  status      String   @default("OPEN")
+  createdAt   DateTime @default(now())
+  createdById String
+  createdBy   User     @relation("TopicCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  sessions    NetSession[] @relation("SessionTopic")
+}
+
+model Repeater {
+  id         String   @id @default(cuid())
+  name       String
+  frequency  Float
+  offsetKhz  Int
+  toneHz     Float?
+  mode       String
+  coverage   String?
+  latitude   Float?
+  longitude  Float?
+  createdAt  DateTime @default(now())
+  nets       Net[]
+  netLinks   NetLink[] @relation("LinkedNet")
+}
+
+model Net {
+  id         String       @id @default(cuid())
+  name       String
+  /// "weekly" = scheduled net (dayOfWeek/startLocal/timezone meaningful);
+  /// "impromptu" = ad-hoc net, not picked up by the reminder scheduler.
+  kind       String       @default("weekly")
+  repeaterId String
+  repeater   Repeater     @relation(fields: [repeaterId], references: [id], onDelete: Cascade)
+  /// For impromptu nets these scheduling fields are sentinels (0 / "00:00" / "UTC").
+  dayOfWeek  Int
+  startLocal String
+  timezone   String
+  theme      String?
+  scriptMd   String?
+  /// Category of this net's script: "weekly" | "general" | "impromptu".
+  scriptCategory String   @default("general")
+  /// JSON-encoded array of minutes-before-start at which to fire reminders
+  /// (e.g. "[240,30]" = ping 4h and 30m before the net). Null or "[]" means
+  /// "no reminders for this net". SQLite has no native array type, so this
+  /// is stored as a JSON string and parsed by the API/scheduler.
+  reminderMinutes String?  @default("[240,30]")
+  active     Boolean      @default(true)
+  sessions   NetSession[]
+  links      NetLink[]
+  reminders  NetReminder[]
+
+  /// Repeater -> nets is walked on every repeater stats/detail request
+  /// (checkIn.count({ where: { session: { net: { repeaterId } } } })) and by the
+  /// cascade when a repeater is deleted. Without it both are table scans.
+  @@index([repeaterId])
+}
+
+/// Tracks which reminders have already been sent for a specific net occurrence,
+/// so the scheduler doesn't double-fire. The "occurrence" is the scheduled
+/// net start moment, normalized to the minute.
+model NetReminder {
+  id        String   @id @default(cuid())
+  netId     String
+  net       Net      @relation(fields: [netId], references: [id], onDelete: Cascade)
+  /// Scheduled start moment, normalized to the minute
+  occursAt  DateTime
+  /// Which reminder fired, encoded as "m<N>" where N is the lead time in
+  /// minutes (e.g. "m240" for 4 hours, "m30" for 30 minutes). Per-net
+  /// reminder lead times are configured on `Net.reminderMinutes`.
+  kind      String
+  sentAt    DateTime @default(now())
+
+  @@unique([netId, occursAt, kind])
+  @@index([occursAt])
+}
+
+/// Discord bridge dedupe: external Discord message id, kept so we don't
+/// re-mirror a message that we already imported.
+model DiscordRelay {
+  id              String   @id @default(cuid())
+  /// Discord's snowflake message id
+  discordMessageId String  @unique
+  /// sessionMessageId we wrote into (null if outbound — we generated and posted)
+  sessionMessageId String?
+  /// "in" = arrived from Discord -> stored locally; "out" = generated locally -> posted to Discord
+  direction       String
+  createdAt       DateTime @default(now())
+
+  @@index([sessionMessageId])
+}
+
+model NetLink {
+  id         String   @id @default(cuid())
+  netId      String
+  net        Net      @relation(fields: [netId], references: [id], onDelete: Cascade)
+  repeaterId String
+  repeater   Repeater @relation("LinkedNet", fields: [repeaterId], references: [id], onDelete: Cascade)
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([netId, repeaterId])
+  @@index([netId])
+}
+
+model NetSession {
+  id          String    @id @default(cuid())
+  netId       String
+  net         Net       @relation(fields: [netId], references: [id], onDelete: Cascade)
+  startedAt   DateTime
+  /// When the session actually goes "live" — the operator pressed START. Null
+  /// means the session was OPENED into prep state but the control op has not
+  /// yet started it. Distinct from startedAt so we can track when the prep
+  /// window began (for staleness) separately from when the on-air net began.
+  liveAt      DateTime?
+  endedAt     DateTime?
+  controlOpId String?
+  controlOp   User?     @relation("ControlOp", fields: [controlOpId], references: [id], onDelete: SetNull)
+  notes       String?
+  topicId     String?
+  topic       TopicSuggestion? @relation("SessionTopic", fields: [topicId], references: [id], onDelete: SetNull)
+  topicTitle  String?
+  /// True when this session was created by the server-side auto-open scheduler
+  /// (a weekly net's PREP session opened ~15 minutes before its scheduled
+  /// start). Operator-opened sessions stay false. Used so the prep view can
+  /// surface that the net was auto-opened and is awaiting a control op.
+  autoOpened  Boolean   @default(false)
+  checkIns    CheckIn[]
+  messages    SessionMessage[]
+  deletedAt   DateTime?
+
+  /// netId is the single hottest predicate in the app (session list per net,
+  /// active-session lookup, the import/auto-open same-day dedupe). Composite
+  /// with startedAt because every one of those either range-filters or orders
+  /// by it; SQLite still uses this index for netId-only lookups (leftmost
+  /// prefix), so a separate single-column index would only cost write time.
+  @@index([netId, startedAt])
+  @@index([startedAt])
+  @@index([deletedAt])
+}
+
+model SessionMessage {
+  id            String     @id @default(cuid())
+  sessionId     String
+  session       NetSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?      @relation("MessageAuthor", fields: [userId], references: [id], onDelete: SetNull)
+  callsign      String
+  nameAtMessage String
+  body          String
+  createdAt     DateTime   @default(now())
+  reactions     SessionMessageReaction[]
+
+  @@index([sessionId, createdAt])
+  @@index([userId])
+}
+
+model SessionMessageReaction {
+  id        String         @id @default(cuid())
+  messageId String
+  message   SessionMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  emoji     String
+  source    String
+  userId    String?
+  user      User?          @relation("ReactionAuthor", fields: [userId], references: [id], onDelete: SetNull)
+  authorTag String?
+  createdAt DateTime       @default(now())
+
+  @@unique([messageId, emoji, userId, authorTag])
+  @@index([messageId])
+}
+
+model CheckIn {
+  id            String     @id @default(cuid())
+  sessionId     String
+  session       NetSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?      @relation("CheckInSubject", fields: [userId], references: [id], onDelete: SetNull)
+  createdById   String?
+  createdBy     User?      @relation("CheckInCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  callsign      String
+  nameAtCheckIn String
+  checkedInAt   DateTime   @default(now())
+  comment       String?
+  /// Participation method. NULL is treated as 'rf' (the default for the
+  /// FCC-friendly log — operators on the local repeater). 'echolink' marks
+  /// VoIP check-ins. Kept as a free-form string (not an enum) so future
+  /// modes like 'allstar' / 'irlp' don't require another migration.
+  mode          String?
+  /// Position in the session's log, 1-based. The log is a record of the order
+  /// stations were HEARD, which is not always the order they were typed: an
+  /// operator who misses a station adds it later and moves it into place.
+  /// Kept separate from checkedInAt on purpose — that column records when the
+  /// entry was actually made, and rewriting it to fake a sort order would be
+  /// falsifying an FCC-facing log. Nullable only so the column could be added
+  /// to existing rows; every row is assigned one on insert.
+  sequence      Int?
+  deletedAt     DateTime?
+
+  @@index([sessionId])
+  @@index([callsign])
+  @@index([checkedInAt])
+  @@index([deletedAt])
+  @@index([sessionId, sequence])
+}
+
+/// Local mirror of the FCC ULS amateur licence database (l_amat.zip), refreshed
+/// weekly by `lib/ulsScheduler.ts`. It exists so that resolving a callsign to a
+/// name during a net does not depend on callook.info (or anything else) being
+/// reachable: the FCC bulk data is the same source callook itself republishes,
+/// it is free, and once imported it answers offline in a single indexed read.
+///
+/// Deliberately narrow: only what a lookup renders. Street address, ZIP, FRN,
+/// grant/expiry dates, trustee and previous-callsign history are all present in
+/// the source files and are all thrown away while streaming — storing them
+/// would multiply the table size for fields nothing in this app displays.
+///
+/// `status` doubles as the publish flag; see `statusGeneration` and the
+/// interruption-safety notes at the top of lib/ulsImport.ts.
+model UlsLicense {
+  /// Uppercase callsign. Primary key, so a lookup is one index seek.
+  callsign         String  @id
+  /// unique_system_identifier of the licence these fields were read from.
+  ///
+  /// This is NOT decoration. 9.2% of active callsigns (75,967 of 823,953 in
+  /// the 2026-08-30 dump) also carry an expired or cancelled licence row for a
+  /// PREVIOUS holder, and EN.dat/AM.dat contain a row for each. Keying the
+  /// import on callsign alone therefore lets whichever row happens to stream
+  /// last decide the name — putting the previous holder's name on roughly one
+  /// active callsign in eleven. Every write is guarded on this column instead,
+  /// and the authoritative value is the one HD.dat marks ACTIVE.
+  /// Max observed value is 5,352,429, comfortably inside Int.
+  usi              Int
+  /// "First Last" for a person, the full organisation name for a club.
+  /// Null when EN.dat carried no usable name, or when the name we held turned
+  /// out to belong to a different licence than the active one (see usi).
+  name             String?
+  /// callook-compatible wording (EXTRA / ADVANCED / GENERAL / TECHNICIAN /
+  /// TECHNICIAN PLUS / NOVICE) so the SPA renders local and remote hits
+  /// identically. Null for club stations, which have no operator class.
+  operatorClass    String?
+  /// FCC licence status from HD.dat. Only 'A' (active) is ever published;
+  /// NULL means "this row was created by the EN/AM pass and HD.dat has not
+  /// confirmed it active", which is exactly the half-imported state a lookup
+  /// must not answer from. Every lookup filters on status = 'A'.
+  status           String?
+  city             String?
+  /// Two-letter state/territory code as it appears in EN.dat.
+  state            String?
+  /// The import generation that last saw this callsign ACTIVE in HD.dat.
+  /// Used only by the post-import sweep (delete anything the newest completed
+  /// import did not confirm); never read on the lookup path.
+  statusGeneration Int?
+
+  @@index([statusGeneration])
+}
+
+model UlsImportRun {
+  id             String    @id @default(cuid())
+  /// Monotonic import counter. Rows in UlsLicense are stamped with the
+  /// generation that confirmed them active.
+  generation     Int
+  startedAt      DateTime
+  finishedAt     DateTime?
+  /// 'running' | 'success' | 'failed'. A 'running' row whose process died is
+  /// marked 'failed' by the next import (see markInterruptedRuns).
+  outcome        String
+  /// 'schedule' | 'manual' | 'startup'
+  trigger        String
+  sourceUrl      String
+  /// "File Creation Date" as printed inside the archive's `counts` member —
+  /// the FCC's own stamp for the dump, not our download time.
+  sourceFileDate String?
+  /// Data lines read across AM/EN/HD.
+  rowsRead       Int       @default(0)
+  /// Callsigns confirmed ACTIVE by this run (the published row count).
+  callsigns      Int       @default(0)
+  /// Lines skipped because they had too few pipe-separated fields.
+  malformedRows  Int       @default(0)
+  /// Rows deleted by the post-import sweep (licences that lapsed).
+  removedRows    Int       @default(0)
+  /// Compressed bytes pulled from the network.
+  bytesRead      Int       @default(0)
+  /// Active callsigns left without a name. Expected to be a double-digit
+  /// number: it is dominated by the handful of callsigns whose newest licence
+  /// row is not the active one, where the importer deliberately drops a name
+  /// it cannot prove belongs to the current holder. A sudden jump means the
+  /// FCC changed EN.dat.
+  unnamedCallsigns Int      @default(0)
+  /// Failure reason, truncated. Null on success.
+  error          String?
+
+  @@index([startedAt])
+}

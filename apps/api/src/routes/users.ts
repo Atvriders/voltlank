@@ -1,115 +1,182 @@
-// NOTE: callsigns are IMMUTABLE after registration. No endpoint allows
-// changing a user's callsign. N0CALL placeholder stays N0CALL.
+// User settings, privacy/retention, data export and account deletion.
+
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
-import { UpdateMeInput, UpdateRoleInput, PublicUser } from '@hna/shared';
-import { validateBody } from '../middleware/validate.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
-import { HttpError } from '../middleware/error.js';
-import { asyncHandler } from '../middleware/async.js';
+import { prisma } from '../core/db';
+import { requireAuth } from '../auth/middleware';
+import { hashPassword, verifyPassword, randomToken } from '../core/crypto';
+import { audit } from '../core/settings';
+import { getSettingsBundle, setSetting } from '../core/settings';
+import { query } from '../core/db';
+import { removeCredentials } from '../providers/registry';
 
-const publicSelect = {
-  id: true,
-  email: true,
-  name: true,
-  callsign: true,
-  role: true,
-  collegeSlug: true,
-} as const;
+export const usersRouter = Router();
 
-export function usersRouter(prisma: PrismaClient): Router {
-  const router = Router();
+usersRouter.use(requireAuth);
 
-  router.patch('/me', requireAuth, validateBody(UpdateMeInput.strict()), asyncHandler(async (req, res) => {
-    const body = req.body as z.infer<typeof UpdateMeInput>;
-    const updated = await prisma.user.update({
-      where: { id: req.user!.id },
-      data: {
-        name: body.name ?? undefined,
-        collegeSlug: body.collegeSlug === undefined ? undefined : body.collegeSlug,
+usersRouter.get('/settings', async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+    return;
+  }
+  const bundle = await getSettingsBundle();
+  res.json({
+    data: {
+      units: user.units,
+      timezone: user.timezone,
+      locale: user.locale,
+      theme: user.theme,
+      demoMode: user.demoEnabled,
+      presentationMode: user.presentationMode,
+      orgName: bundle.orgName,
+      telemetryRetentionDays: Number(bundle.telemetryRetentionDays || 365),
+      locationRetentionDays: Number(bundle.locationRetentionDays || 90),
+    },
+  });
+});
+
+usersRouter.patch('/settings', async (req, res) => {
+  const body = (req.body ?? {}) as { units?: string; timezone?: string; theme?: string; presentationMode?: boolean };
+  const data: Record<string, unknown> = {};
+  if (['metric', 'imperial'].includes(body.units ?? '')) data.units = body.units;
+  if (typeof body.timezone === 'string' && /^[A-Za-z_+\-0-9/]{2,40}$/.test(body.timezone)) data.timezone = body.timezone;
+  if (typeof body.theme === 'string' && body.theme.length <= 40) data.theme = body.theme;
+  if (typeof body.presentationMode === 'boolean') data.presentationMode = body.presentationMode;
+  await prisma.user.update({ where: { id: req.user!.id }, data });
+  res.json({ data: { ok: true } });
+});
+
+usersRouter.post('/change-password', async (req, res) => {
+  const { currentPassword, newPassword } = (req.body ?? {}) as { currentPassword?: string; newPassword?: string };
+  if (!currentPassword || !newPassword || newPassword.length < 10) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Current password and a new password (10+ characters) required.' } });
+    return;
+  }
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user || !(await verifyPassword(user.passwordHash, currentPassword))) {
+    res.status(403).json({ error: { code: 'BAD_PASSWORD', message: 'Current password is incorrect.' } });
+    return;
+  }
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(newPassword) } });
+  await prisma.userSession.updateMany({ where: { userId: user.id, id: { not: req.user!.sessionId }, revokedAt: null }, data: { revokedAt: new Date() } });
+  await audit({ actorId: user.id, action: 'user.change_password', entityType: 'user', entityId: user.id });
+  res.json({ data: { ok: true } });
+});
+
+// ---- Data export ----
+
+usersRouter.get('/export', async (req, res) => {
+  const userId = req.user!.id;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+    return;
+  }
+  const [vehicles, drives, charges, commands, notifications, automations, places, telemetryCount] = await Promise.all([
+    prisma.vehicle.findMany({ where: { ownerId: userId } }),
+    prisma.drive.findMany({ where: { vehicle: { ownerId: userId } } }),
+    prisma.chargingSession.findMany({ where: { vehicle: { ownerId: userId } } }),
+    prisma.vehicleCommand.findMany({ where: { userId } }),
+    prisma.appNotification.findMany({ where: { userId }, take: 1000 }),
+    prisma.automation.findMany({ where: { userId } }),
+    prisma.place.findMany({ where: { userId } }),
+    query<{ n: string }>(`SELECT count(*)::text AS n FROM telemetry_reading WHERE vehicle_id IN (SELECT id FROM "Vehicle" WHERE "ownerId" = $1)`, [userId]),
+  ]);
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename="voltlank-export.json"');
+  res.send(
+    JSON.stringify(
+      {
+        export: 'voltlank',
+        version: 1,
+        generatedAt: new Date().toISOString(),
+        account: { email: user.email, name: user.name, role: user.role, timezone: user.timezone, units: user.units, createdAt: user.createdAt.toISOString() },
+        vehicles,
+        drives,
+        chargingSessions: charges,
+        commands,
+        notifications,
+        automations,
+        places,
+        telemetryPointCount: Number(telemetryCount.rows[0]?.n ?? 0),
       },
-      select: publicSelect,
-    });
-    res.json(PublicUser.parse(updated));
-  }));
-
-  router.get('/directory', requireAuth, asyncHandler(async (_req, res) => {
-    const list = await prisma.user.findMany({
-      select: { callsign: true, name: true },
-      orderBy: { callsign: 'asc' },
-    });
-    res.json(list);
-  }));
-
-  // Roster of users eligible to be Net Control. Used by the active-session
-  // "change control" picker. Gated to NET_CONTROL+ (the run-the-net set) since
-  // reassigning control is part of running the net; the PATCH that applies the
-  // change is likewise NET_CONTROL. Any member can *be* Net Control, so the
-  // candidate list is the full roster.
-  router.get('/control-candidates', requireRole('NET_CONTROL'), asyncHandler(async (_req, res) => {
-    const list = await prisma.user.findMany({
-      select: { id: true, callsign: true, name: true, role: true },
-      orderBy: { callsign: 'asc' },
-    });
-    res.json(list);
-  }));
-
-  router.get('/', requireRole('ADMIN'), asyncHandler(async (_req, res) => {
-    const users = await prisma.user.findMany({
-      select: publicSelect,
-      orderBy: { createdAt: 'asc' },
-    });
-    res.json(users.map((u) => PublicUser.parse(u)));
-  }));
-
-  router.delete('/:id', requireRole('ADMIN'), asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    if (id === req.user!.id) {
-      throw new HttpError(400, 'VALIDATION', 'Cannot delete your own account');
-    }
-    try {
-      await prisma.user.delete({ where: { id } });
-      res.status(204).end();
-    } catch {
-      throw new HttpError(404, 'NOT_FOUND', 'User not found');
-    }
-  }));
-
-  router.patch(
-    '/:id',
-    requireRole('ADMIN'),
-    validateBody(
-      z.object({
-        collegeSlug: z.string().max(40).nullable().optional(),
-      }).strict(),
+      null,
+      2,
     ),
-    asyncHandler(async (req, res) => {
-      try {
-        const updated = await prisma.user.update({
-          where: { id: req.params.id },
-          data: { collegeSlug: (req.body as { collegeSlug?: string | null }).collegeSlug },
-          select: publicSelect,
-        });
-        res.json(PublicUser.parse(updated));
-      } catch {
-        throw new HttpError(404, 'NOT_FOUND', 'User not found');
-      }
-    }),
   );
+});
 
-  router.patch('/:id/role', requireRole('ADMIN'), validateBody(UpdateRoleInput), asyncHandler(async (req, res) => {
-    try {
-      const updated = await prisma.user.update({
-        where: { id: req.params.id },
-        data: { role: (req.body as z.infer<typeof UpdateRoleInput>).role },
-        select: publicSelect,
-      });
-      res.json(PublicUser.parse(updated));
-    } catch {
-      throw new HttpError(404, 'NOT_FOUND', 'User not found');
+// ---- Account deletion (personal data removal) ----
+
+usersRouter.post('/delete', async (req, res) => {
+  const { password } = (req.body ?? {}) as { password?: string };
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+    return;
+  }
+  if (!password || !(await verifyPassword(user.passwordHash, password))) {
+    res.status(403).json({ error: { code: 'BAD_PASSWORD', message: 'Re-enter your password to delete the account.' } });
+    return;
+  }
+  // Remove encrypted provider credentials and personal data.
+  const accounts = await prisma.providerAccount.findMany({ where: { userId: user.id } });
+  for (const account of accounts) {
+    await removeCredentials(account.id);
+  }
+  const vehicles = await prisma.vehicle.findMany({ where: { ownerId: user.id }, select: { id: true } });
+  await query(`DELETE FROM telemetry_reading WHERE vehicle_id = ANY($1)`, [vehicles.map((v) => v.id)]);
+  await prisma.providerAccount.updateMany({ where: { userId: user.id }, data: { status: 'revoked', lastError: 'account deleted' } });
+  await prisma.vehicle.updateMany({ where: { ownerId: user.id }, data: { active: false } });
+  await prisma.userSession.updateMany({ where: { userId: user.id }, data: { revokedAt: new Date() } });
+  await prisma.pushSubscription.deleteMany({ where: { userId: user.id } });
+  await prisma.webhookEndpoint.deleteMany({ where: { userId: user.id } });
+  await prisma.user.update({ where: { id: user.id }, data: { deletedAt: new Date(), email: `deleted-${randomToken(8)}@deleted.invalid` } });
+  await audit({ actorId: user.id, action: 'user.delete_account', entityType: 'user', entityId: user.id });
+  res.clearCookie('vl_session');
+  res.json({ data: { ok: true } });
+});
+
+// ---- Demo mode toggle ----
+
+usersRouter.post('/demo-mode', async (req, res) => {
+  const { enabled } = (req.body ?? {}) as { enabled?: boolean };
+  if (typeof enabled !== 'boolean') {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'enabled required.' } });
+    return;
+  }
+  if (enabled) {
+    const { connectDemoAccount } = await import('../providers/registry');
+    const { seedDemoWorld } = await import('../telemetry/seed');
+    const result = await connectDemoAccount(req.user!.id);
+    if (result.vehiclesImported === 0) {
+      const vehicles = await prisma.vehicle.findMany({ where: { providerAccountId: result.accountId }, select: { id: true, providerVehicleId: true } });
+      await seedDemoWorld(req.user!.id, vehicles);
     }
-  }));
+    res.json({ data: { ok: true, accountId: result.accountId } });
+    return;
+  }
+  await prisma.user.update({ where: { id: req.user!.id }, data: { demoEnabled: false } });
+  res.json({ data: { ok: true } });
+});
 
-  return router;
-}
+// ---- Retention settings (per-user defaults follow global) ----
+
+usersRouter.patch('/retention', async (req, res) => {
+  const body = (req.body ?? {}) as { telemetryRetentionDays?: number; locationRetentionDays?: number };
+  if (body.telemetryRetentionDays !== undefined) {
+    if (!Number.isInteger(body.telemetryRetentionDays) || body.telemetryRetentionDays < 7 || body.telemetryRetentionDays > 3650) {
+      res.status(400).json({ error: { code: 'VALIDATION', message: 'telemetryRetentionDays must be 7–3650.' } });
+      return;
+    }
+    await setSetting('telemetryRetentionDays', String(body.telemetryRetentionDays));
+  }
+  if (body.locationRetentionDays !== undefined) {
+    if (!Number.isInteger(body.locationRetentionDays) || body.locationRetentionDays < 7 || body.locationRetentionDays > 3650) {
+      res.status(400).json({ error: { code: 'VALIDATION', message: 'locationRetentionDays must be 7–3650.' } });
+      return;
+    }
+    await setSetting('locationRetentionDays', String(body.locationRetentionDays));
+  }
+  res.json({ data: { ok: true } });
+});

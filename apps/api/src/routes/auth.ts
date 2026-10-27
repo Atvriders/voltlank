@@ -1,185 +1,320 @@
+// Auth routes: accounts, sessions, verification, reset, TOTP, passkeys.
+
 import { Router } from 'express';
-import type { z } from 'zod';
-import { PrismaClient, Prisma } from '@prisma/client';
-import { RegisterInput, LoginInput, PublicUser, type Role } from '@hna/shared';
-import { hashPassword, verifyPassword } from '../lib/password.js';
-import { signToken, COOKIE_NAME, COOKIE_OPTS } from '../lib/jwt.js';
-import { env } from '../env.js';
-import { HttpError } from '../middleware/error.js';
-import { validateBody } from '../middleware/validate.js';
-import { requireAuth } from '../middleware/auth.js';
-import { asyncHandler } from '../middleware/async.js';
-import { getSetting } from '../lib/settings.js';
-import { DEFAULT_THEME_SETTING_KEY } from './themes.js';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+import { prisma } from '../core/db';
+import { env } from '../core/env';
+import { randomToken } from '../core/crypto';
+import { requireAuth } from '../auth/middleware';
+import {
+  registerUser, sendVerificationEmail, verifyEmail, login, loginWithTotp, requestPasswordReset,
+  resetPassword, listSessions, revokeSession, revokeAllOtherSessions, setupTotp, confirmTotp,
+  disableTotp, verifyTotpCode, webauthnRegistrationOptions, webauthnVerifyRegistration,
+  webauthnAuthOptions, webauthnVerifyAuthentication, listPasskeys, deletePasskey, publicUser,
+  AuthError, signSessionJwt,
+} from '../auth/service';
 
-/**
- * One message for "email taken" AND "callsign taken".
- *
- * Login already refuses to say whether an account exists; registration used to
- * answer "Email already in use", which turned the public sign-up form into a
- * membership oracle — anyone could test a list of addresses (or callsigns,
- * which map to real names and home addresses in the FCC database) against the
- * club roster. The wording still tells a genuine user what to do next.
- */
-const DUPLICATE_REGISTRATION_MESSAGE =
-  'That email or callsign is already registered. Try signing in, or contact a club officer for help.';
+export const authRouter = Router();
 
-/**
- * Case-insensitive lookup of a user id by email.
- *
- * SQLite's UNIQUE index on User.email is BINARY and email input is normalized
- * to lowercase, so accounts created before normalization can be stored as
- * "Bob@X.com" — invisible to `findUnique({ email: 'bob@x.com' })`. Those
- * members would silently be unable to sign in (and could re-register as a
- * second account). Prisma has no case-insensitive filter on SQLite, hence the
- * raw LOWER() comparison. `email` is passed as a bound parameter, not
- * interpolated.
- *
- * SQLite's LOWER() is ASCII-only, so a legacy row with a non-ASCII uppercase
- * character in the local part would not be matched — accepted, since the
- * shared Email schema only admits addresses that are ASCII in practice.
- */
-async function findUserIdByEmailInsensitive(
-  prisma: PrismaClient,
-  email: string,
-): Promise<string | null> {
-  const rows = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id FROM "User" WHERE LOWER(email) = ${email.toLowerCase()} LIMIT 1
-  `;
-  return rows[0]?.id ?? null;
+const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
+
+const registerSchema = z.object({ email: z.string(), name: z.string().max(80), password: z.string() });
+const loginSchema = z.object({ email: z.string(), password: z.string(), totp: z.string().optional() });
+
+function handleAuthError(res: import('express').Response, err: unknown): void {
+  if (err instanceof AuthError) {
+    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    return;
+  }
+  throw err;
 }
 
-export function authRouter(prisma: PrismaClient): Router {
-  const router = Router();
+authRouter.get('/me', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Account unavailable.' } });
+    return;
+  }
+  const passkeys = await prisma.passkeyCredential.count({ where: { userId: user.id } });
+  const pub = publicUser(user);
+  res.json({ data: { ...pub, passkeyEnabled: passkeys > 0 } });
+});
 
-  router.get('/config', (_req, res) => {
-    res.json({ inviteCodeRequired: Boolean(env.REGISTRATION_CODE) });
+authRouter.get('/csrf', (req, res) => {
+  let token = req.cookies?.[env.CSRF_COOKIE_NAME];
+  if (typeof token !== 'string' || !token) {
+    token = randomToken(16);
+    res.cookie(env.CSRF_COOKIE_NAME, token, { httpOnly: false, sameSite: 'lax', secure: env.NODE_ENV === 'production', path: '/' });
+  }
+  res.json({ data: { token } });
+});
+
+authRouter.post('/register', loginLimiter, async (req, res) => {
+  const parsed = registerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Check your email, name, and password.' } });
+    return;
+  }
+  try {
+    const user = await registerUser(parsed.data);
+    // create session so onboarding can continue; verification gates later steps
+    const { token } = await (await import('../auth/service')).createSession(user.id, req.ip, req.get('user-agent'));
+    const dev = env.NODE_ENV !== 'production' && !env.SMTP_URL;
+    const v = await sendVerificationEmail({ id: user.id, email: user.email, name: user.name });
+    setSessionCookie(res, token);
+    res.status(201).json({
+      data: { user, verification: dev ? { token: v.token, link: v.link, note: 'Development mode: link logged to console and returned for local testing only.' } : { sent: v.sent } },
+    });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/verify-email', async (req, res) => {
+  const { token } = (req.body ?? {}) as { token?: string };
+  if (!token) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Missing token.' } });
+    return;
+  }
+  try {
+    await verifyEmail(token);
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/resend-verification', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+    return;
+  }
+  if (user.emailVerifiedAt) {
+    res.json({ data: { alreadyVerified: true } });
+    return;
+  }
+  const v = await sendVerificationEmail({ id: user.id, email: user.email, name: user.name });
+  const dev = env.NODE_ENV !== 'production' && !env.SMTP_URL;
+  res.json({ data: dev ? { token: v.token, link: v.link } : { sent: v.sent } });
+});
+
+authRouter.post('/login', loginLimiter, async (req, res) => {
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Email and password are required.' } });
+    return;
+  }
+  try {
+    const result = await login({ ...parsed.data, ip: req.ip, userAgent: req.get('user-agent') });
+    if (result.totpRequired) {
+      res.json({ data: { totpRequired: true, email: parsed.data.email } });
+      return;
+    }
+    setSessionCookie(res, result.token);
+    res.json({ data: { user: result.user } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/login/totp', loginLimiter, async (req, res) => {
+  const { email, code } = (req.body ?? {}) as { email?: string; code?: string };
+  if (!email || !code) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Email and code required.' } });
+    return;
+  }
+  try {
+    const result = await loginWithTotp(email, code, req.ip, req.get('user-agent'));
+    setSessionCookie(res, result.token);
+    res.json({ data: { user: result.user } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/logout', requireAuth, async (req, res) => {
+  await prisma.userSession.update({ where: { id: req.user!.sessionId }, data: { revokedAt: new Date() } });
+  res.clearCookie(env.SESSION_COOKIE);
+  res.json({ data: { ok: true } });
+});
+
+authRouter.post('/forgot-password', loginLimiter, async (req, res) => {
+  const { email } = (req.body ?? {}) as { email?: string };
+  if (!email) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Email is required.' } });
+    return;
+  }
+  const result = await requestPasswordReset(email);
+  const dev = env.NODE_ENV !== 'production' && !env.SMTP_URL;
+  res.json({ data: dev && result.token ? { ok: true, token: result.token, link: result.link } : { ok: true } });
+});
+
+authRouter.post('/reset-password', async (req, res) => {
+  const { token, password } = (req.body ?? {}) as { token?: string; password?: string };
+  if (!token || !password) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Token and new password required.' } });
+    return;
+  }
+  try {
+    await resetPassword(token, password);
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.get('/sessions', requireAuth, async (req, res) => {
+  const sessions = await listSessions(req.user!.id, req.user!.sessionId);
+  res.json({ data: sessions });
+});
+
+authRouter.post('/sessions/:id/revoke', requireAuth, async (req, res) => {
+  try {
+    await revokeSession(req.user!.id, String(req.params.id));
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/sessions/revoke-others', requireAuth, async (req, res) => {
+  await revokeAllOtherSessions(req.user!.id, req.user!.sessionId);
+  res.json({ data: { ok: true } });
+});
+
+// ---- TOTP ----
+
+authRouter.post('/totp/setup', requireAuth, async (req, res) => {
+  const { secret, otpauthUrl } = await setupTotp(req.user!.id);
+  res.json({ data: { secret, otpauthUrl } });
+});
+
+authRouter.post('/totp/confirm', requireAuth, async (req, res) => {
+  const { code } = (req.body ?? {}) as { code?: string };
+  if (!code) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Code required.' } });
+    return;
+  }
+  try {
+    const { recoveryCodes } = await confirmTotp(req.user!.id, code);
+    res.json({ data: { ok: true, recoveryCodes } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/totp/disable', requireAuth, async (req, res) => {
+  const { code } = (req.body ?? {}) as { code?: string };
+  if (!code) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Code required.' } });
+    return;
+  }
+  try {
+    await disableTotp(req.user!.id, code);
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/stepup', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+    return;
+  }
+  const { password, totp } = (req.body ?? {}) as { password?: string; totp?: string };
+  let ok = false;
+  if (totp && user.totpEnabled) ok = verifyTotpCode(user.totpSecret, totp);
+  if (!ok && password) ok = await (await import('../core/crypto')).verifyPassword(user.passwordHash, password);
+  if (!ok) {
+    res.status(403).json({ error: { code: 'REAUTH_FAILED', message: 'Re-authentication failed.' } });
+    return;
+  }
+  const proof = signSessionJwt(user.id, 'stepup', user.role, 300);
+  res.json({ data: { stepUpToken: proof, expiresIn: 300 } });
+});
+
+// ---- Passkeys (WebAuthn) ----
+
+authRouter.get('/passkey/register-options', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+    return;
+  }
+  try {
+    const options = await webauthnRegistrationOptions({ id: user.id, email: user.email, name: user.name });
+    res.json({ data: options });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.post('/passkey/register-verify', requireAuth, async (req, res) => {
+  try {
+    await webauthnVerifyRegistration(req.user!.id, req.body);
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.get('/passkey/auth-options', async (req, res) => {
+  const options = await webauthnAuthOptions();
+  res.json({ data: options });
+});
+
+authRouter.post('/passkey/auth-verify', loginLimiter, async (req, res) => {
+  const { email, ...body } = (req.body ?? {}) as { email?: string };
+  if (!email) {
+    res.status(400).json({ error: { code: 'VALIDATION', message: 'Email required.' } });
+    return;
+  }
+  try {
+    const result = await webauthnVerifyAuthentication(email, body, req.ip, req.get('user-agent'));
+    setSessionCookie(res, result.token);
+    res.json({ data: { user: result.user } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+authRouter.get('/passkeys', requireAuth, async (req, res) => {
+  res.json({ data: await listPasskeys(req.user!.id) });
+});
+
+authRouter.post('/passkeys/:id/delete', requireAuth, async (req, res) => {
+  try {
+    await deletePasskey(req.user!.id, String(req.params.id));
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+// ---- Challenge endpoint for step-up passkey verification ----
+authRouter.get('/passkey/stepup-options', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+    return;
+  }
+  await prisma.passkeyChallenge.create({
+    data: { userId: user.id, challenge: randomToken(), type: 'auth', expiresAt: new Date(Date.now() + 300_000) },
   });
+  res.json({ data: { ok: true } });
+});
 
-  router.post(
-    '/register',
-    validateBody(RegisterInput),
-    asyncHandler(async (req, res) => {
-      const input = req.body as z.infer<typeof RegisterInput>;
-      if (env.REGISTRATION_CODE && input.inviteCode !== env.REGISTRATION_CODE) {
-        throw new HttpError(403, 'FORBIDDEN', 'Invalid invite code');
-      }
-      const passwordHash = await hashPassword(input.password);
-      let finalCallsign = input.callsign;
-      if (finalCallsign === 'N0CALL' || /^N0CALL\d+$/.test(finalCallsign)) {
-        finalCallsign = 'N0CALL';
-      } else {
-        // Reject duplicate non-N0CALL callsigns up front. (N0CALL is the
-        // shared placeholder for unlicensed members and is allowed to repeat.)
-        // `RegisterInput.callsign` is already trimmed + uppercased by the
-        // shared `Callsign` zod schema, so this match is canonical.
-        const existing = await prisma.user.findFirst({
-          where: { callsign: finalCallsign },
-        });
-        if (existing) {
-          throw new HttpError(409, 'CONFLICT', DUPLICATE_REGISTRATION_MESSAGE);
-        }
-      }
-      // Catch a legacy mixed-case row that the (binary) unique index would let
-      // through as a second account for the same person.
-      if (await findUserIdByEmailInsensitive(prisma, input.email)) {
-        throw new HttpError(409, 'CONFLICT', DUPLICATE_REGISTRATION_MESSAGE);
-      }
-      // First-admin determination + create are wrapped in a transaction so two
-      // concurrent first registrations can't both observe count=0 and both
-      // become ADMIN.
-      try {
-        const user = await prisma.$transaction(async (tx) => {
-          const count = await tx.user.count();
-          const role = count === 0 ? 'ADMIN' : 'MEMBER';
-          let initialCollegeSlug: string | null = null;
-          if (role === 'MEMBER') {
-            initialCollegeSlug = await getSetting(prisma, DEFAULT_THEME_SETTING_KEY);
-          }
-          return tx.user.create({
-            data: {
-              email: input.email,
-              name: input.name,
-              callsign: finalCallsign,
-              passwordHash,
-              role,
-              collegeSlug: initialCollegeSlug,
-            },
-          });
-        });
-        const token = signToken({
-          sub: user.id,
-          role: user.role as Role,
-        });
-        res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
-        res.status(201).json(PublicUser.parse(toPublic(user)));
-      } catch (e) {
-        // Still needed despite the pre-check above: two simultaneous sign-ups
-        // with the same email both pass the check and only one wins the index.
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          throw new HttpError(409, 'CONFLICT', DUPLICATE_REGISTRATION_MESSAGE);
-        }
-        throw e;
-      }
-    }),
-  );
-
-  router.post(
-    '/login',
-    validateBody(LoginInput),
-    asyncHandler(async (req, res) => {
-      const input = req.body as z.infer<typeof LoginInput>;
-      let user = await prisma.user.findUnique({ where: { email: input.email } });
-      if (!user) {
-        // Legacy account stored with mixed-case email — see
-        // findUserIdByEmailInsensitive.
-        const legacyId = await findUserIdByEmailInsensitive(prisma, input.email);
-        if (legacyId) user = await prisma.user.findUnique({ where: { id: legacyId } });
-      }
-      if (!user || !(await verifyPassword(user.passwordHash, input.password))) {
-        throw new HttpError(401, 'UNAUTHENTICATED', 'Invalid credentials');
-      }
-      const token = signToken({
-        sub: user.id,
-        role: user.role as Role,
-      });
-      res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
-      res.json(PublicUser.parse(toPublic(user)));
-    }),
-  );
-
-  router.post('/logout', (_req, res) => {
-    res.clearCookie(COOKIE_NAME, { ...COOKIE_OPTS, maxAge: 0 });
-    res.status(204).end();
+export function setSessionCookie(res: import('express').Response, token: string): void {
+  const isProd = env.NODE_ENV === 'production';
+  res.cookie(env.SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    maxAge: env.JWT_EXPIRES_SEC * 1000,
+    path: '/',
   });
-
-  router.get(
-    '/me',
-    requireAuth,
-    asyncHandler(async (req, res) => {
-      const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
-      if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'User no longer exists');
-      res.json(PublicUser.parse(toPublic(user)));
-    }),
-  );
-
-  return router;
-}
-
-function toPublic(u: {
-  id: string;
-  email: string;
-  name: string;
-  callsign: string;
-  role: string;
-  collegeSlug: string | null;
-}) {
-  return {
-    id: u.id,
-    email: u.email,
-    name: u.name,
-    callsign: u.callsign,
-    role: u.role as Role,
-    collegeSlug: u.collegeSlug,
-  };
 }

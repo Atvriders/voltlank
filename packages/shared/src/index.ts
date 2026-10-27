@@ -1,12 +1,10 @@
-export * from './errors.js';
-export * from './auth.js';
-export * from './repeater.js';
-export * from './net.js';
-export * from './session.js';
-export * from './checkin.js';
-export * from './stats.js';
-export * from './user.js';
-export * from './presence.js';
-export * from './topic.js';
-export * from './message.js';
-export * from './script.js';
+export * from './roles';
+export * from './vehicles';
+export * from './commands';
+export * from './history';
+export * from './automations';
+export * from './fleet';
+export * from './api';
+
+export const APP_NAME = 'VoltLink';
+export const APP_VERSION = '1.0.0';

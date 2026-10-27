@@ -1,17 +1,17 @@
 {
-  "name": "ham-net-assistant",
+  "name": "voltlank",
   "private": true,
-  "version": "0.1.0",
-  "description": "Net-management web app for college amateur-radio clubs: repeaters, scheduled nets, live check-ins, FCC-friendly logs, participation stats, and a Discord bridge.",
+  "version": "1.0.0",
+  "description": "VoltLink — self-hosted connected-vehicle platform: vehicle telemetry, secure controls, drives, charging, battery analytics, automations, notifications, fleet management, and a full status platform.",
   "license": "MIT",
   "author": "Atvriders",
-  "homepage": "https://github.com/Atvriders/ham-net-assistant#readme",
+  "homepage": "https://github.com/Atvriders/voltlank#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Atvriders/ham-net-assistant.git"
+    "url": "git+https://github.com/Atvriders/voltlank.git"
   },
   "bugs": {
-    "url": "https://github.com/Atvriders/ham-net-assistant/issues"
+    "url": "https://github.com/Atvriders/voltlank/issues"
   },
   "workspaces": [
     "packages/*",
@@ -22,17 +22,19 @@
     "@types/node": "^24.0.0",
     "@types/express": "^5.0.0"
   },
-  "//test": "The JWT_SECRET in the `test` script is a throwaway 64-hex value, never used by any deployment. It has to satisfy apps/api/src/env.ts (>= 32 chars, no placeholder words such as 'secret' or 'change-me'): the previous `dev-test-secret-long-enough` is now rejected, and any test file that reaches env.ts without importing test/helpers.ts first would abort the whole suite.",
   "scripts": {
-    "dev:api": "npm -w @hna/api run dev",
-    "dev:web": "npm -w @hna/web run dev",
-    "build": "npm -w @hna/shared run build && npm -w @hna/api run build && npm -w @hna/web run build",
-    "test": "JWT_SECRET=6d1c05e7f38b49a2ce7014b8d5f3a96201e8b7c4d90f523a6e18cb47f0d29a35 npm -w @hna/shared run test && JWT_SECRET=6d1c05e7f38b49a2ce7014b8d5f3a96201e8b7c4d90f523a6e18cb47f0d29a35 npm -w @hna/api run test && npm -w @hna/web run test",
-    "typecheck": "npm -w @hna/shared run typecheck && npm -w @hna/api run typecheck && npm -w @hna/web run typecheck",
-    "lint": "eslint . --max-warnings=0"
+    "dev:api": "npm -w @voltlink/api run dev",
+    "dev:web": "npm -w @voltlink/web run dev",
+    "build": "npm -w @voltlink/shared run build && npm -w @voltlink/api run build && npm -w @voltlink/web run build",
+    "test": "npm -w @voltlink/shared run test && npm -w @voltlink/api run test && npm -w @voltlink/web run test",
+    "typecheck": "npm -w @voltlink/shared run typecheck && npm -w @voltlink/api run typecheck && npm -w @voltlink/web run typecheck",
+    "lint": "eslint . --max-warnings=0",
+    "legacy:scan": "tsx scripts/legacy-scan.ts",
+    "e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.55.0",
     "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.64.0",
     "eslint": "^10.0.0",
@@ -40,7 +42,12 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.0.0",
     "prettier": "^3.9.5",
+    "tsx": "^4.23.1",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.64.0"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "argon2@0.45.0": true
   }
 }

@@ -1,25 +1,27 @@
 {
-  "name": "@hna/shared",
-  "version": "0.1.0",
+  "name": "@voltlink/shared",
+  "version": "1.0.0",
   "private": true,
-  "description": "Ham-Net-Assistant shared contract — Zod 4 schemas, inferred types, and the role ranking used by both API and web.",
-  "license": "MIT",
-  "author": "Atvriders",
-  "homepage": "https://github.com/Atvriders/ham-net-assistant#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Atvriders/ham-net-assistant.git",
-    "directory": "packages/shared"
-  },
+  "description": "VoltLink shared contract — Zod schemas, inferred types, roles, and API shapes used by both API and web.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
-  "dependencies": { "zod": "^4.4.3" },
-  "devDependencies": { "vitest": "^4.1.10" }
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.10"
+  }
 }

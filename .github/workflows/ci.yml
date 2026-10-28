@@ -91,10 +91,30 @@ jobs:
           cd apps/api
           NODE_ENV=development PORT=3111 node dist/index.cjs > /tmp/voltlink-api.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:3111/healthz && break; sleep 1; done
+      - name: API smoke (register → demo → vehicles)
+        run: node - <<'EOF'
+          const base = 'http://127.0.0.1:3111';
+          (async () => {
+            const csrfRes = await fetch(base + '/api/v1/auth/csrf');
+            const csrfCookie = csrfRes.headers.getSetCookie()[0].split(';')[0];
+            const token = (await csrfRes.json()).data.token;
+            const h = { 'content-type': 'application/json', cookie: csrfCookie, 'x-vl-csrf': token };
+            const reg = await fetch(base + '/api/v1/auth/register', { method: 'POST', headers: h, body: JSON.stringify({ name: 'Smoke', email: `smoke-${Date.now()}@ci.test`, password: 'smoke-password-123' }) });
+            console.log('register:', reg.status);
+            const sess = reg.headers.getSetCookie().map(c => c.split(';')[0]).find(c => c.startsWith('vl_session'));
+            const h2 = { 'content-type': 'application/json', cookie: `${csrfCookie}; ${sess}`, 'x-vl-csrf': token };
+            const demo = await fetch(base + '/api/v1/providers/demo/connect', { method: 'POST', headers: h2 });
+            console.log('demo connect:', demo.status, (await demo.json()).data?.vehiclesImported);
+            const veh = await fetch(base + '/api/v1/vehicles', { headers: { cookie: `${csrfCookie}; ${sess}` } });
+            const vbody = await veh.json();
+            console.log('vehicles:', veh.status, vbody.data?.length);
+            if (!(reg.status === 201 && demo.status === 200 && veh.status === 200 && vbody.data?.length >= 5)) process.exit(1);
+          })().catch(e => { console.error(e); process.exit(1); });
+          EOF
       - run: npx playwright test --reporter=list
-      - name: API log on failure
-        if: failure()
-        run: tail -100 /tmp/voltlink-api.log
+      - name: API log
+        if: always()
+        run: tail -60 /tmp/voltlink-api.log
 
   assets:
     runs-on: ubuntu-latest

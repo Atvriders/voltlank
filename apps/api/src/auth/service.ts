@@ -12,7 +12,7 @@ import {
 } from '@simplewebauthn/server';
 import { prisma } from '../core/db';
 import { env } from '../core/env';
-import { hashPassword, verifyPassword, sha256hex, randomToken } from '../core/crypto';
+import { hashPassword, verifyPassword, sha256hex, randomToken, randomId } from '../core/crypto';
 import { audit } from '../core/settings';
 import type { UserPublic, SessionInfo } from '@voltlink/shared';
 
@@ -184,18 +184,22 @@ export async function verifyEmail(token: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function createSession(userId: string, ip?: string, userAgent?: string, label?: string): Promise<{ token: string; sessionId: string; expiresAt: Date }> {
+  // Generate the session id first so the row can be inserted in one shot with
+  // its final token hash — no 'pending' placeholder that a crash could leave
+  // behind to poison the unique constraint for every later registration.
+  const sessionId = randomId();
+  const token = signSessionJwt(userId, sessionId, 'r', env.JWT_EXPIRES_SEC);
   const session = await prisma.userSession.create({
     data: {
+      id: sessionId,
       userId,
-      tokenHash: 'pending',
+      tokenHash: tokenHash(token),
       ip: ip?.slice(0, 64),
       userAgent: userAgent?.slice(0, 256),
       label: label?.slice(0, 64),
       expiresAt: new Date(Date.now() + env.JWT_EXPIRES_SEC * 1000),
     },
   });
-  const token = signSessionJwt(userId, session.id, 'r', env.JWT_EXPIRES_SEC);
-  await prisma.userSession.update({ where: { id: session.id }, data: { tokenHash: tokenHash(token) } });
   return { token, sessionId: session.id, expiresAt: session.expiresAt };
 }
 

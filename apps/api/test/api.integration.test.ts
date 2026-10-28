@@ -9,7 +9,7 @@ import { prisma } from '../src/core/db';
 import { env } from '../src/core/env';
 
 process.env.NODE_ENV = 'test';
-if (!process.env.JWT_SECRET) process.env.JWT_SECRET = 'test-jwt-secret-0123456789abcdef0123456789abcdef';
+if (!process.env.JWT_SECRET) process.env.JWT_SECRET = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
 const base = () => `http://127.0.0.1:${port}`;
 let server: Server;

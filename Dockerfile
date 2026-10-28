@@ -27,7 +27,9 @@ RUN npm run build \
   && cp -r apps/web/dist/* apps/api/web-dist/
 
 # Keep production deps only (prisma CLI is a runtime dep for migrate deploy).
-RUN npm prune --omit=dev
+# A fresh prod-only `npm ci` is deterministic — unlike `prune`, it cannot leave
+# hoisted dev dependencies (e.g. jsdom's undici) in the final image.
+RUN npm ci --omit=dev
 
 # ---------------------------------------------------------------- runtime stage
 FROM node:24-bookworm-slim AS runtime

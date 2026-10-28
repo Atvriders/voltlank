@@ -45,3 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider credentials envelope-encrypted (AES-256-GCM, wrapped DEK,
   versioned keys).
 - Boot-time refusal of placeholder secrets.
+
+## Notes
+
+- CI gitleaks scans the full history on every push; the first push of a new
+  repository has no parent commit for range scans, so any push after the
+  initial one is scanned incrementally.

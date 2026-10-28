@@ -92,7 +92,8 @@ jobs:
           NODE_ENV=development PORT=3111 node dist/index.cjs > /tmp/voltlink-api.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:3111/healthz && break; sleep 1; done
       - name: API smoke (register → demo → vehicles)
-        run: node - <<'EOF'
+        run: |
+          node - <<'EOF'
           const base = 'http://127.0.0.1:3111';
           (async () => {
             const csrfRes = await fetch(base + '/api/v1/auth/csrf');

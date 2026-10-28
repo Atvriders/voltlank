@@ -48,7 +48,7 @@ function findPart(obj: THREE.Object3D, name: string): THREE.Object3D | null {
   return null;
 }
 
-function VehicleModel({ url, vehicle, state, preset, signal }: { url: string; vehicle: VehicleWithState; state: VehicleState | null; preset: GraphicsPreset; signal: { ok: boolean } }) {
+function VehicleModel({ url, vehicle, state, preset, signal, onLoaded }: { url: string; vehicle: VehicleWithState; state: VehicleState | null; preset: GraphicsPreset; signal: { ok: boolean }; onLoaded?: () => void }) {
   const gltf = useLoader(GLTFLoader, url);
   const ref = useRef<THREE.Group>(null);
   const stateRef = useRef(state);
@@ -81,11 +81,12 @@ function VehicleModel({ url, vehicle, state, preset, signal }: { url: string; ve
 
   useEffect(() => {
     signal.ok = true;
+    onLoaded?.();
     return () => {
       signal.ok = false;
       // GPU cleanup happens via three disposal in the parent unmount
     };
-  }, [signal]);
+  }, [signal, onLoaded]);
 
   useFrame(({ clock }) => {
     const s = stateRef.current;
@@ -243,14 +244,18 @@ export default function VehicleViewer({
   const cfg = PRESETS[p];
   const [missing, setMissing] = useState(false);
   const [assetOk, setAssetOk] = useState<boolean | null>(null);
-  const asset = `/assets/models/${vehicle.vehicleClass}.glb`;
+  const [glbLoaded, setGlbLoaded] = useState(false);
   const signal = useRef({ ok: false });
+  // LOD: low/medium graphics presets load the decimated _lod variant that the
+  // Blender pipeline emits alongside every class.
+  const useLod = p === 'low' || p === 'medium';
+  const asset = `/assets/models/${vehicle.vehicleClass}${useLod ? '_lod' : ''}.glb`;
 
   // Preflight the GLB before letting GLTFLoader fetch it, so a missing asset
   // degrades to the procedural fallback instead of a loader error.
   useEffect(() => {
     let cancelled = false;
-    const url = `/assets/models/${vehicle.vehicleClass}.glb`;
+    const url = `/assets/models/${vehicle.vehicleClass}${useLod ? '_lod' : ''}.glb`;
     fetch(url, { method: 'HEAD' })
       .then((r) => {
         if (!cancelled) setAssetOk(r.ok);
@@ -261,12 +266,12 @@ export default function VehicleViewer({
     return () => {
       cancelled = true;
     };
-  }, [vehicle.vehicleClass]);
+  }, [vehicle.vehicleClass, useLod]);
 
   const useGlb = assetOk === true && !missing;
 
   return (
-    <div className={`relative overflow-hidden rounded-xl border border-line bg-canvas ${className}`} style={{ height }} data-testid="vehicle-viewer">
+    <div className={`relative overflow-hidden rounded-xl border border-line bg-canvas ${className}`} style={{ height }} data-testid="vehicle-viewer" data-asset={useGlb && glbLoaded ? 'glb' : 'fallback'}>
       <Canvas
         dpr={cfg.pxRatio}
         shadows={cfg.shadows}
@@ -284,7 +289,7 @@ export default function VehicleViewer({
         <Suspense fallback={<FallbackVehicle vehicle={vehicle} state={state} />}>
           {useGlb ? (
             <ErrorBoundary3D onError={() => setMissing(true)}>
-              <VehicleModel url={asset} vehicle={vehicle} state={state} preset={p} signal={signal.current} />
+              <VehicleModel url={asset} vehicle={vehicle} state={state} preset={p} signal={signal.current} onLoaded={() => setGlbLoaded(true)} />
             </ErrorBoundary3D>
           ) : (
             <FallbackVehicle vehicle={vehicle} state={state} />

@@ -1,7 +1,8 @@
 // End-to-end acceptance test: registration → demo mode → vehicles → command
 // lifecycle → key pages render without console errors.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { register } from './helpers';
 
 const consoleErrors: string[] = [];
 
@@ -18,24 +19,6 @@ test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
 });
 
-async function register(page: Page, email: string): Promise<void> {
-  const hydrated = page.waitForResponse((r) => r.url().includes('/api/v1/auth/me'));
-  await page.goto('/register', { waitUntil: 'domcontentloaded' });
-  // React mounts and AuthProvider issues /auth/me — only then are handlers attached.
-  await hydrated;
-  await page.getByLabel('Name').fill('E2E Tester');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill('e2e-password-123');
-  const postDone = page.waitForResponse((r) => r.url().includes('/auth/register') && r.request().method() === 'POST');
-  const meOk = page.waitForResponse((r) => r.url().includes('/api/v1/auth/me') && r.ok());
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await postDone;
-  await meOk;
-  // Ensure the session cookie is committed before the test navigates on.
-  await expect
-    .poll(async () => (await page.context().cookies()).some((c) => c.name === 'vl_session'), { timeout: 10000 })
-    .toBe(true);
-}
 
 test('full demo acceptance flow', async ({ page }) => {
   const email = `e2e-${Date.now()}@voltlank.test`;

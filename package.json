@@ -2,7 +2,7 @@
   "name": "voltlank",
   "private": true,
   "version": "1.0.0",
-  "description": "VoltLink — self-hosted connected-vehicle platform: vehicle telemetry, secure controls, drives, charging, battery analytics, automations, notifications, fleet management, and a full status platform.",
+  "description": "VoltLink \u2014 self-hosted connected-vehicle platform: vehicle telemetry, secure controls, drives, charging, battery analytics, automations, notifications, fleet management, and a full status platform.",
   "license": "MIT",
   "author": "Atvriders",
   "homepage": "https://github.com/Atvriders/voltlank#readme",
@@ -18,7 +18,7 @@
     "apps/*"
   ],
   "overrides": {
-    "vite": "^7.0.0",
+    "vite": "^7.3.7",
     "@types/node": "^24.0.0",
     "@types/express": "^5.0.0"
   },

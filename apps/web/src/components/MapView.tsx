@@ -2,7 +2,7 @@
 // geofences, privacy zones, and route replay. No external tile service.
 
 import { useEffect, useRef } from 'react';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import { circleGeoJson, createMap, routeGeoJson } from '../lib/map';
 
 export interface MapLayer {

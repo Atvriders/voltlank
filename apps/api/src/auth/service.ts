@@ -73,8 +73,8 @@ export function publicUser(u: {
 // Mailer
 // ---------------------------------------------------------------------------
 
-let transporter: nodemailer.Transporter | null = null;
-function getTransporter(): nodemailer.Transporter | null {
+let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
+function getTransporter(): ReturnType<typeof nodemailer.createTransport> | null {
   if (!env.SMTP_URL) return null;
   if (!transporter) transporter = nodemailer.createTransport(env.SMTP_URL);
   return transporter;

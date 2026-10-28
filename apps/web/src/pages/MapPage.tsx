@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crosshair, MapPin, Plus, Shield } from 'lucide-react';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import { api } from '../api/client';
 import MapView, { circleGeoJson } from '../components/MapView';
 import { Badge, Button, Card, Field, Input, Modal, Select } from '../components/ui';

@@ -2,7 +2,7 @@
 // (deterministic street grid + venues) so demo mode needs no external tiles
 // or tokens.
 
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 export type MapPoint = { lat: number; lon: number; label?: string; kind?: 'vehicle' | 'place' | 'charger' | 'geofence' | 'privacy' | 'start' | 'end' | 'route' };

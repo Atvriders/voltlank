@@ -2,7 +2,7 @@
   "name": "@voltlink/shared",
   "version": "1.0.0",
   "private": true,
-  "description": "VoltLink shared contract — Zod schemas, inferred types, roles, and API shapes used by both API and web.",
+  "description": "VoltLink shared contract \u2014 Zod schemas, inferred types, roles, and API shapes used by both API and web.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,7 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "typescript": "^5.4.5",

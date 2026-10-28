@@ -40,7 +40,7 @@ function findPrismaBin(): string {
 }
 
 // CLI entry for `node dist/cli/migrateLeader.js`
-if (process.argv[1]?.endsWith('migrateLeader.js')) {
+if (process.argv[1]?.endsWith('migrateLeader.js') || process.argv[1]?.endsWith('migrateLeader.cjs')) {
   void runMigrationLeader()
     .then(() => {
       console.log('[voltlank] migrations current');

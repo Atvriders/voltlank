@@ -2,3 +2,16 @@
 #
 # Format: <finding-id>  <justification>  <expiry YYYY-MM-DD>
 # Add entries only with a reviewed justification and a concrete expiry.
+
+# --- Node base image bundled npm (not application code) ---
+# The findings below live in /usr/local/lib/node_modules/npm/node_modules —
+# the npm CLI bundled with the node:24-bookworm-slim base image. VoltLink does
+# not execute npm/undici/brace-expansion at runtime (the entrypoint runs
+# dist/*.cjs only); the fixes ship with a newer Node/npm in the base image.
+# Re-check on every base-image bump and drop these entries when clean.
+CVE-2026-102276  npm-bundled brace-expansion; unreachable at runtime  2027-01-31
+CVE-2026-102278  npm-bundled brace-expansion; unreachable at runtime  2027-01-31
+CVE-2026-109383  npm-bundled undici; unreachable at runtime          2027-01-31
+CVE-2026-109869  npm-bundled undici; unreachable at runtime          2027-01-31
+CVE-2026-19534   npm-bundled undici; unreachable at runtime          2027-01-31
+CVE-2026-87018   npm-bundled undici; unreachable at runtime          2027-01-31

@@ -3,11 +3,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
+import crypto from 'node:crypto';
 import { buildApp } from '../src/app';
 import { prisma } from '../src/core/db';
 
 process.env.NODE_ENV = 'test';
-if (!process.env.JWT_SECRET) process.env.JWT_SECRET = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
+if (!process.env.JWT_SECRET) process.env.JWT_SECRET = crypto.randomBytes(32).toString('hex');
 
 let server: Server;
 let port = 0;

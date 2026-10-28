@@ -4,8 +4,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, BellRing, CheckCheck, Plus, Trash2 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner } from '../components/ui';
+import { api } from '../api/client';
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, Spinner } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 import { EVENT_TYPES, type AppNotification, type NotificationPreference } from '@voltlink/shared';
 

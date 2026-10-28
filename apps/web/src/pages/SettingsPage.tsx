@@ -2,14 +2,14 @@
 // preferences, privacy & retention, data export and account deletion.
 
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, KeyRound, Laptop, Lock, Plus, ShieldCheck, Smartphone, Trash2, UserCircle } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { Badge, Button, Card, Field, Input, Modal, Select, Spinner } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Select } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
-import { ROLES, type SessionInfo } from '@voltlink/shared';
+import type { SessionInfo } from '@voltlink/shared';
 
 export default function SettingsPage() {
   const location = useLocation();
@@ -41,11 +41,9 @@ export default function SettingsPage() {
 
 function ProfileTab() {
   const { user, refresh } = useAuth();
-  const qc = useQueryClient();
   const [units, setUnits] = useState(user?.units ?? 'metric');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [presentation, setPresentation] = useState(user?.presentationMode ?? false);
-  const [orgName, setOrgName] = useState('');
   const save = useMutation({
     mutationFn: () => api('/api/v1/users/settings', { method: 'PATCH', body: { units, timezone, presentationMode: presentation } }),
     onSuccess: () => refresh(),

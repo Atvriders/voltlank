@@ -1,7 +1,19 @@
 // Small shared utilities for routes.
 
 export function csv(lines: string[][]): string {
-  return lines.map((l) => l.map((c) => `"${c}"`).join(',')).join('\n');
+  return lines
+    .map((l) =>
+      l
+        .map((cell) => {
+          const c = String(cell);
+          if (/[",\n]/.test(c)) {
+            return `"${c.replace(/"/g, '""')}"`;
+          }
+          return c;
+        })
+        .join(','),
+    )
+    .join('\n');
 }
 
 export function toDateParam(v: unknown): Date | undefined {

@@ -10,7 +10,7 @@ import { Badge, Button, Card, Spinner } from '../components/ui';
 import { fmtDist, STATUS_LABEL } from '../lib/format';
 import type { VehicleWithState } from '@voltlink/shared';
 
-const SCENES = ['viewer', 'stats'] as const;
+type Scene = 'viewer' | 'stats';
 
 export default function PresentationPage() {
   const { data: vehicles, isLoading } = useQuery({
@@ -19,7 +19,7 @@ export default function PresentationPage() {
     refetchInterval: 20000,
   });
   const [index, setIndex] = useState(0);
-  const [scene, setScene] = useState<(typeof SCENES)[number]>('viewer');
+  const [scene, setScene] = useState<Scene>('viewer');
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {

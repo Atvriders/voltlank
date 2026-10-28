@@ -7,9 +7,9 @@ import { ArrowLeft, Pause, Play, RotateCcw, Tag } from 'lucide-react';
 import { api } from '../api/client';
 import MapView, { routeGeoJson } from '../components/MapView';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Stat } from '../components/ui';
-import { fmtDist, fmtDuration, fmtEnergy, fmtMoney, fmtSpeed, fmtTemp } from '../lib/format';
+import { fmtDist, fmtDuration, fmtEnergy, fmtSpeed, fmtTemp } from '../lib/format';
 import { useAuth } from '../auth/AuthContext';
-import type { Drive, DrivePoint } from '@voltlink/shared';
+import type { Drive } from '@voltlink/shared';
 
 export default function DriveDetailPage() {
   const { id } = useParams();
@@ -39,7 +39,7 @@ export default function DriveDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['drive', id] }),
   });
 
-  const route = drive?.route ?? [];
+  const route = useMemo(() => drive?.route ?? [], [drive?.route]);
   const replayPoints = useMemo(() => route.slice(0, Math.max(1, Math.floor((progress / 100) * route.length))), [route, progress]);
 
   useEffect(() => {

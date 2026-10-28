@@ -18,7 +18,7 @@ export async function seedDemoWorld(userId: string, vehicles: { id: string; prov
   const placeHome = await prisma.place.create({ data: { userId, name: 'Home', type: 'home', lat: DEMO_HOME.lat, lon: DEMO_HOME.lon, radiusM: 150 } });
   const placeWork = await prisma.place.create({ data: { userId, name: 'Work', type: 'work', lat: DEMO_WORK.lat, lon: DEMO_WORK.lon, radiusM: 200 } });
   const placeCharger = await prisma.place.create({ data: { userId, name: 'Rivermark Supercharge', type: 'charger', lat: DEMO_CHARGER.lat, lon: DEMO_CHARGER.lon, radiusM: 100 } });
-  const placeTrail = await prisma.place.create({ data: { userId, name: 'Hawk Ridge Trailhead', type: 'custom', lat: DEMO_SITE.lat, lon: DEMO_SITE.lon, radiusM: 300 } });
+  await prisma.place.create({ data: { userId, name: 'Hawk Ridge Trailhead', type: 'custom', lat: DEMO_SITE.lat, lon: DEMO_SITE.lon, radiusM: 300 } });
 
   // ---- Rate rules ----
   const tou = await prisma.rateRule.create({
@@ -58,7 +58,6 @@ export async function seedDemoWorld(userId: string, vehicles: { id: string; prov
   const aurora = bySpec.get('demo-aurora');
   const comet = bySpec.get('demo-comet');
   const terra = bySpec.get('demo-terra');
-  const atlas = bySpec.get('demo-atlas');
   const bison = bySpec.get('demo-bison');
   if (aurora) await prisma.vehicleAssignment.create({ data: { ownerId: userId, vehicleId: aurora, driverId: drivers[0]!.id, departmentId: deptOps.id, costCenterId: ccOps.id, fromAt: new Date(now.getTime() - 30 * DAY) } });
   if (comet) await prisma.vehicleAssignment.create({ data: { ownerId: userId, vehicleId: comet, driverId: drivers[1]!.id, departmentId: deptSales.id, costCenterId: ccSales.id, fromAt: new Date(now.getTime() - 30 * DAY) } });
@@ -77,8 +76,6 @@ export async function seedDemoWorld(userId: string, vehicles: { id: string; prov
       const dayStart = new Date(now.getTime() - dayOffset * DAY);
       const dow = dayStart.getUTCDay();
       const isWeekend = dow === 0 || dow === 6;
-      const homeToWork = haversineKm(DEMO_HOME.lat, DEMO_HOME.lon, DEMO_WORK.lat, DEMO_WORK.lon);
-      const workToHome = homeToWork;
 
       const makeDrive = async (from: { lat: number; lon: number; name: string }, to: { lat: number; lon: number; name: string }, h: number, durationMin: number, pct: number) => {
         const startAt = new Date(dayStart.getTime() + h * 3600000);
@@ -290,7 +287,7 @@ export async function seedDemoWorld(userId: string, vehicles: { id: string; prov
       cooldownSec: 3600, maxRetries: 1, runCount: 9, lastRunAt: new Date(now.getTime() - 2 * 3600000),
     },
   });
-  const auto4 = await prisma.automation.create({
+  await prisma.automation.create({
     data: {
       userId, name: 'Late-night door check', description: 'Alert if a door is open after 22:00.', enabled: false,
       triggerType: 'door_open', triggerParams: JSON.parse('{}'),

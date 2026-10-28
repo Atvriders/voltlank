@@ -13,19 +13,23 @@ export function fictionalCityGeoJson(): { type: 'FeatureCollection'; features: u
   const center = { lat: 39.0734, lon: -104.6211 };
   const span = 0.11;
   const step = 0.008;
-  // Street grid
-  for (let lat = center.lat - span; lat <= center.lat + span; lat += step) {
+  // Street grid (index-based centre lines so float drift can't hide arterials).
+  let latIdx = 0;
+  for (let lat = center.lat - span; lat <= center.lat + span; lat += step, latIdx++) {
+    const latCenterIdx = Math.round(span / step);
     features.push({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [[center.lon - span * 1.4, lat], [center.lon + span * 1.4, lat]] },
-      properties: { kind: lat === center.lat || Math.abs(lat - center.lat) < 0.002 ? 'arterial' : 'street' },
+      properties: { kind: latIdx === latCenterIdx ? 'arterial' : 'street' },
     });
   }
-  for (let lon = center.lon - span * 1.4; lon <= center.lon + span * 1.4; lon += step) {
+  let lonIdx = 0;
+  for (let lon = center.lon - span * 1.4; lon <= center.lon + span * 1.4; lon += step, lonIdx++) {
+    const lonCenterIdx = Math.round((span * 1.4) / step);
     features.push({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [[lon, center.lat - span], [lon, center.lat + span]] },
-      properties: { kind: lon === center.lon || Math.abs(lon - center.lon) < 0.002 ? 'arterial' : 'street' },
+      properties: { kind: lonIdx === lonCenterIdx ? 'arterial' : 'street' },
     });
   }
   // Lake in the northeast

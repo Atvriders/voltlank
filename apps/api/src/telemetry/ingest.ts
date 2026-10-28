@@ -7,7 +7,6 @@ import { ssePublish } from '../core/sse';
 import { haversineKm, round2 } from '../core/geo';
 import { dispatchTrigger } from '../automations/engine';
 import { notify } from '../notifications/service';
-import { getSetting } from '../core/settings';
 import type { VehicleState } from '@voltlink/shared';
 import type { VehicleWithState } from '../access';
 
@@ -18,12 +17,6 @@ const geofenceState = new Map<string, boolean>(); // `${geofenceId}:${vehicleId}
 
 const MIN_DRIVE_SPEED = 8; // km/h
 const DRIVE_END_IDLE_SEC = 180;
-
-function privacyApplied(userId: string, state: VehicleState): { address?: string } {
-  // Address display is redacted inside privacy zones — checked asynchronously
-  // by the caller; here we pass through.
-  return { address: state.address };
-}
 
 export async function ingestVehicleState(vehicle: VehicleWithState, state: VehicleState, opts: { live: boolean }): Promise<void> {
   const fetchedAt = new Date(state.fetchedAt ?? Date.now());
@@ -73,10 +66,6 @@ export async function ingestVehicleState(vehicle: VehicleWithState, state: Vehic
 
   // 3. Latest location (no logs — DB only).
   if (typeof state.lat === 'number' && typeof state.lon === 'number') {
-    const zone = await prisma.privacyZone.findFirst({
-      where: { userId: vehicle.ownerId, enabled: true },
-      orderBy: { id: 'asc' },
-    });
     // Redact address when inside any privacy zone (iterate lazily).
     let address = state.address ?? null;
     if (address) {

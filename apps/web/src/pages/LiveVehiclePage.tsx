@@ -1,24 +1,23 @@
 // Live vehicle page: state-aware 3D view, detailed telemetry, and secure
 // remote controls with the full command lifecycle.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Activity, AlertTriangle, Battery, BatteryCharging, Bell, Car, CircleDot, Clock, Fan, Gauge, History, KeyRound,
-  Lightbulb, Lock, LockOpen, MapPin, Navigation, Pause, Play, Power, RotateCw, ShieldAlert, ShieldCheck, Snowflake,
-  Sparkles, Thermometer, Timer, Trash2, Unlock, Wifi, Wind, X, Zap,
+  Activity, BatteryCharging, Bell, Car, CircleDot, Clock, Fan, Gauge, KeyRound,
+  Lightbulb, Lock, MapPin, Navigation, Pause, Play, Power, RotateCw, ShieldCheck, Snowflake,
+  Thermometer, Unlock, Wind, Zap,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Badge, Button, Card, Field, Input, Modal, ProgressBar, Select, Spinner, Stat } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, ProgressBar, Select, Spinner } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
 import VehicleViewer, { autoPreset, type GraphicsPreset } from '../webgl/VehicleViewer';
 import {
-  batteryTone, COMMAND_STATUS_LABEL, fmtClock, fmtDist, fmtEnergy, fmtPower, fmtSpeed, fmtTemp, FRESHNESS_LABEL,
+  batteryTone, COMMAND_STATUS_LABEL, fmtClock, fmtDist, fmtPower, fmtSpeed, fmtTemp, FRESHNESS_LABEL,
   STATUS_LABEL, timeAgo,
 } from '../lib/format';
 import { COMMAND_DEFINITIONS, HIGH_RISK_COMMANDS, type CommandType, type CommandParams, type VehicleCommand, type VehicleWithState, type VehicleState } from '@voltlink/shared';
-import { useNow } from '../components/Shell';
 
 interface CommandWithEvents extends VehicleCommand {
   events?: { id: string; event: string; actor: string; detail: string; createdAt: string }[];
@@ -26,10 +25,8 @@ interface CommandWithEvents extends VehicleCommand {
 
 export default function LiveVehiclePage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const now = useNow(3000);
   const units = user?.units ?? 'metric';
 
   const { data: vehicles } = useQuery({
@@ -271,7 +268,7 @@ function StepUpModal({ open, onClose, onConfirm }: { open: boolean; onClose: () 
   );
 }
 
-function CommandModal({ command, onClose, units }: { command?: CommandWithEvents; onClose: () => void; units: 'metric' | 'imperial' }) {
+function CommandModal({ command, onClose, units: _units }: { command?: CommandWithEvents; onClose: () => void; units: 'metric' | 'imperial' }) {
   if (!command) return null;
   const statuses = ['queued', 'submitted', 'accepted', 'confirmed'] as const;
   const idx = statuses.indexOf(command.status as (typeof statuses)[number]);
@@ -309,7 +306,7 @@ function CommandModal({ command, onClose, units }: { command?: CommandWithEvents
   );
 }
 
-function StateDetails({ vehicle, state, units }: { vehicle: VehicleWithState; state: VehicleState | null; units: 'metric' | 'imperial' }) {
+function StateDetails({ vehicle: _vehicle, state, units }: { vehicle: VehicleWithState; state: VehicleState | null; units: 'metric' | 'imperial' }) {
   if (!state) return <Card title="State"><p className="py-2 text-sm text-faint">No state snapshot yet.</p></Card>;
   const doors = state.doors ?? { frontLeft: false, frontRight: false, rearLeft: false, rearRight: false };
   const anyDoor = Object.values(doors).some(Boolean);

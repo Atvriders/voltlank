@@ -2,18 +2,17 @@
 // location search on the fictional demo map.
 
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crosshair, MapPin, Plus, Shield } from 'lucide-react';
 import type maplibregl from 'maplibre-gl';
 import { api } from '../api/client';
-import MapView, { circleGeoJson, routeGeoJson } from '../components/MapView';
+import MapView, { circleGeoJson } from '../components/MapView';
 import { Badge, Button, Card, Field, Input, Modal, Select } from '../components/ui';
 import type { Geofence, Place, PrivacyZone, VehicleWithState } from '@voltlink/shared';
 
 export default function MapPage() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [selected, setSelected] = useState<string>('all');
   const [addPlace, setAddPlace] = useState(false);
   const [pick, setPick] = useState<{ lat: number; lon: number } | null>(null);

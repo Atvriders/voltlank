@@ -1,0 +1,395 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "VoltLink API",
+    "version": "1.0.0",
+    "description": "Self-hosted connected-vehicle platform API. Authenticated with the `vl_session` cookie; mutating requests require the `X-VL-CSRF` header (obtain both from the SPA or `/api/v1/auth/csrf`).",
+    "license": { "name": "MIT" },
+    "contact": { "url": "https://github.com/Atvriders/voltlank" }
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "tags": [
+    { "name": "auth" },
+    { "name": "users" },
+    { "name": "providers" },
+    { "name": "vehicles" },
+    { "name": "commands" },
+    { "name": "drives" },
+    { "name": "charging" },
+    { "name": "analytics" },
+    { "name": "automations" },
+    { "name": "notifications" },
+    { "name": "fleet" },
+    { "name": "status" },
+    { "name": "admin" }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Create an account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Account created; session cookie set." },
+          "400": { "$ref": "#/components/responses/Validation" },
+          "409": { "description": "Email already registered." }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Password login (first step; second step at /auth/login/totp when TOTP enabled)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Session cookie set, or TOTP required." },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "Current user",
+        "responses": {
+          "200": {
+            "description": "User public profile (includes theme, units, timezone, roles).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserPublic" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": { "tags": ["auth"], "summary": "Revoke the current session", "responses": { "204": { "description": "Logged out." } } }
+    },
+    "/auth/sessions": {
+      "get": { "tags": ["auth"], "summary": "List sessions", "responses": { "200": { "description": "Session list." } } }
+    },
+    "/auth/sessions/{id}": {
+      "delete": { "tags": ["auth"], "summary": "Revoke one session", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "204": { "description": "Revoked." } } }
+    },
+    "/auth/sessions/revoke-all": {
+      "post": { "tags": ["auth"], "summary": "Revoke all sessions", "responses": { "204": { "description": "All sessions revoked." } } }
+    },
+    "/auth/step-up": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Step-up re-authentication for high-risk commands",
+        "responses": { "200": { "description": "Step-up window opened." }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/auth/csrf": {
+      "get": { "tags": ["auth"], "summary": "Issue the CSRF cookie and return the header value", "responses": { "200": { "description": "CSRF token." } } }
+    },
+    "/users/settings": {
+      "patch": {
+        "tags": ["users"],
+        "summary": "Update own settings (units, timezone, theme)",
+        "responses": { "200": { "description": "Updated." } }
+      }
+    },
+    "/users/export": {
+      "get": { "tags": ["users"], "summary": "Full JSON export of the user's data", "responses": { "200": { "description": "Data bundle." } } }
+    },
+    "/users": {
+      "delete": { "tags": ["users"], "summary": "Permanently delete the account and owned data", "responses": { "204": { "description": "Deleted." } } }
+    },
+    "/providers/readiness": {
+      "get": { "tags": ["providers"], "summary": "Readiness diagnostics for connected providers", "responses": { "200": { "description": "Check list." } } }
+    },
+    "/providers/demo/connect": {
+      "post": { "tags": ["providers"], "summary": "Connect the demo fleet (5 vehicles, 30 days of history)", "responses": { "200": { "description": "Import summary." } } }
+    },
+    "/vehicles": {
+      "get": {
+        "tags": ["vehicles"],
+        "summary": "List vehicles with live state and freshness",
+        "responses": {
+          "200": {
+            "description": "Vehicles.",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/VehicleWithState" } } } } } }
+          }
+        }
+      }
+    },
+    "/vehicles/{id}/state": {
+      "get": {
+        "tags": ["vehicles"],
+        "summary": "Live state for one vehicle",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Vehicle state.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VehicleState" } } } }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/vehicles/{id}/refresh": {
+      "post": {
+        "tags": ["vehicles"],
+        "summary": "Force a state fetch now",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "202": { "description": "Refresh scheduled." } }
+      }
+    },
+    "/commands/{vehicleId}/issue": {
+      "post": {
+        "tags": ["commands"],
+        "summary": "Issue a vehicle command (validated, rate-limited, idempotent)",
+        "parameters": [{ "name": "vehicleId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                  "command": { "$ref": "#/components/schemas/CommandName" },
+                  "params": { "type": "object", "additionalProperties": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": { "description": "Queued.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VehicleCommand" } } } },
+          "403": { "description": "Step-up required, capability missing, or kill switch active." },
+          "429": { "description": "Rate bucket exhausted." }
+        }
+      }
+    },
+    "/commands": {
+      "get": {
+        "tags": ["commands"],
+        "summary": "List commands (filter by vehicle)",
+        "parameters": [{ "name": "vehicleId", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Commands." } }
+      }
+    },
+    "/commands/{id}": {
+      "get": {
+        "tags": ["commands"],
+        "summary": "Command detail with audit events",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Command.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VehicleCommand" } } } } }
+      },
+      "post": {
+        "tags": ["commands"],
+        "summary": "Cancel a pending command",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Canceled." } }
+      }
+    },
+    "/drives": {
+      "get": {
+        "tags": ["drives"],
+        "summary": "List drives",
+        "parameters": [
+          { "name": "vehicleId", "in": "query", "schema": { "type": "string" } },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "perPage", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Paginated drives." } }
+      }
+    },
+    "/drives/export.csv": {
+      "get": { "tags": ["drives"], "summary": "Export drives as CSV", "responses": { "200": { "description": "CSV." } } }
+    },
+    "/charging/sessions": {
+      "get": { "tags": ["charging"], "summary": "List charging sessions", "responses": { "200": { "description": "Sessions." } } }
+    },
+    "/charging/rates": {
+      "get": { "tags": ["charging"], "summary": "List electricity rate rules", "responses": { "200": { "description": "Rate rules." } } },
+      "post": {
+        "tags": ["charging"],
+        "summary": "Create a rate rule (flat / time-of-use / location)",
+        "responses": { "201": { "description": "Created." } }
+      }
+    },
+    "/analytics/battery-health": {
+      "get": { "tags": ["analytics"], "summary": "Battery health estimate per vehicle", "responses": { "200": { "description": "Health estimates." } } }
+    },
+    "/automations": {
+      "get": { "tags": ["automations"], "summary": "List automations", "responses": { "200": { "description": "Automations." } } },
+      "post": {
+        "tags": ["automations"],
+        "summary": "Create an automation (trigger + conditions + actions)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Automation" } } } },
+        "responses": { "201": { "description": "Created." } }
+      }
+    },
+    "/automations/{id}/dry-run": {
+      "post": { "tags": ["automations"], "summary": "Evaluate without executing", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Evaluation result." } } }
+    },
+    "/notifications": {
+      "get": { "tags": ["notifications"], "summary": "Inbox", "responses": { "200": { "description": "Notifications." } } }
+    },
+    "/notifications/read-all": {
+      "post": { "tags": ["notifications"], "summary": "Mark all read", "responses": { "204": { "description": "Marked." } } }
+    },
+    "/notifications/preferences": {
+      "get": { "tags": ["notifications"], "summary": "Channel preferences", "responses": { "200": { "description": "Preferences." } } },
+      "patch": { "tags": ["notifications"], "summary": "Update preferences", "responses": { "200": { "description": "Updated." } } }
+    },
+    "/fleet/overview": {
+      "get": { "tags": ["fleet"], "summary": "Fleet overview (groups, status, totals)", "responses": { "200": { "description": "Overview." } } }
+    },
+    "/fleet/report": {
+      "post": { "tags": ["fleet"], "summary": "Generate a fleet report", "responses": { "200": { "description": "Report." } } }
+    },
+    "/status": {
+      "get": { "tags": ["status"], "summary": "Public status bundle (components, incidents, maintenance, uptime)", "responses": { "200": { "description": "Status." } } }
+    },
+    "/status/badge.svg": {
+      "get": { "tags": ["status"], "summary": "SVG status badge", "responses": { "200": { "description": "SVG.", "content": { "image/svg+xml": { "schema": { "type": "string" } } } } } }
+    },
+    "/admin/health": {
+      "get": { "tags": ["admin"], "summary": "Platform health (DB, queue, roles)", "responses": { "200": { "description": "Health." }, "403": { "description": "Admin role required." } } }
+    },
+    "/realtime": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "SSE stream of vehicle events for the authenticated user",
+        "responses": { "200": { "description": "text/event-stream.", "content": { "text/event-stream": { "schema": { "type": "string" } } } } }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "Unauthorized": { "description": "Not authenticated." },
+      "NotFound": { "description": "Resource not found." },
+      "Validation": { "description": "Validation error.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+          }
+        }
+      },
+      "UserPublic": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string" },
+          "theme": { "type": "string" },
+          "units": { "type": "string" },
+          "timezone": { "type": "string" },
+          "emailVerified": { "type": "boolean" },
+          "totpEnabled": { "type": "boolean" },
+          "passkeys": { "type": "integer" }
+        }
+      },
+      "CommandName": {
+        "type": "string",
+        "enum": ["lock", "unlock", "honk_horn", "flash_lights", "climate_on", "climate_off", "set_temperature", "charge_start", "charge_stop", "set_charge_limit", "wake", "remote_start", "open_trunk", "open_frunk", "enable_sentry", "disable_sentry"]
+      },
+      "CommandStatus": {
+        "type": "string",
+        "enum": ["queued", "submitted", "accepted", "confirmed", "failed", "rejected", "unsupported", "timed_out", "canceled"]
+      },
+      "VehicleCommand": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "vehicleId": { "type": "string" },
+          "command": { "$ref": "#/components/schemas/CommandName" },
+          "status": { "$ref": "#/components/schemas/CommandStatus" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "finishedAt": { "type": "string", "format": "date-time" },
+          "errorCode": { "type": "string" }
+        }
+      },
+      "VehicleState": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["online", "asleep", "offline"] },
+          "locked": { "type": "boolean" },
+          "doors": {
+            "type": "object",
+            "properties": {
+              "frontLeft": { "type": "boolean" },
+              "frontRight": { "type": "boolean" },
+              "rearLeft": { "type": "boolean" },
+              "rearRight": { "type": "boolean" }
+            }
+          },
+          "trunkOpen": { "type": "boolean" },
+          "frunkOpen": { "type": "boolean" },
+          "chargePortOpen": { "type": "boolean" },
+          "plugConnected": { "type": "boolean" },
+          "chargingState": { "type": "string" },
+          "batterySocPct": { "type": "number" },
+          "rangeKm": { "type": "number" },
+          "odometerKm": { "type": "number" },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "speedKmh": { "type": "number" },
+          "climateOn": { "type": "boolean" },
+          "freshness": { "type": "string", "enum": ["fresh", "stale", "last_known"] },
+          "alarmState": { "type": "string" }
+        }
+      },
+      "VehicleWithState": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "displayName": { "type": "string" },
+          "make": { "type": "string" },
+          "model": { "type": "string" },
+          "year": { "type": "integer" },
+          "vehicleClass": { "type": "string" },
+          "exteriorColor": { "type": "string" },
+          "capabilities": { "type": "array", "items": { "type": "string" } },
+          "state": { "$ref": "#/components/schemas/VehicleState" }
+        }
+      },
+      "Automation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "trigger": { "type": "string" },
+          "conditions": { "type": "object", "additionalProperties": true },
+          "actions": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "cooldownSec": { "type": "integer" },
+          "enabled": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

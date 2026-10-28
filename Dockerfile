@@ -45,6 +45,7 @@ COPY --from=build --chown=voltlank:voltlank /app/apps/api/package.json /app/apps
 COPY --from=build --chown=voltlank:voltlank /app/apps/api/dist /app/apps/api/dist
 COPY --from=build --chown=voltlank:voltlank /app/apps/api/prisma /app/apps/api/prisma
 COPY --from=build --chown=voltlank:voltlank /app/apps/api/web-dist /app/apps/api/web-dist
+COPY --from=build --chown=voltlank:voltlank /app/apps/api/openapi.json /app/apps/api/openapi.json
 COPY --chown=voltlank:voltlank docker/entrypoint.sh /usr/local/bin/voltlank-entrypoint
 COPY --chown=voltlank:voltlank docker/healthcheck.sh /usr/local/bin/voltlank-healthcheck
 

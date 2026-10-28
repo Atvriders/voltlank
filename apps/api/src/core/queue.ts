@@ -95,7 +95,7 @@ class PgQueue implements JobQueue {
           } finally {
             client.release();
           }
-        } catch (err) {
+        } catch {
           // connection hiccup — retry shortly
           await new Promise((r) => setTimeout(r, 1000));
         }

@@ -1,17 +1,17 @@
 // Application shell: desktop sidebar, mobile navigation, vehicle switcher,
 // theme menu, and the real-time notifications bell.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, Bell, Battery, BatteryCharging, Boxes, Car, ChevronDown, CircleUserRound, Gauge, LayoutDashboard,
-  Map as MapIcon, Menu, Moon, Palette, PlugZap, RadioTower, Settings, ShieldCheck, Sun, Users, X, Zap, MonitorPlay,
+  Map as MapIcon, Menu, Moon, Palette, PlugZap, Settings, ShieldCheck, Sun, Users, X, Zap, MonitorPlay,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { setTheme, THEMES } from '../auth/AuthContext';
-import { Badge, Spinner } from './ui';
-import type { UserPublic, VehicleWithState, AppNotification } from '@voltlink/shared';
+import { Badge } from './ui';
+import type { UserPublic, VehicleWithState } from '@voltlink/shared';
 
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },

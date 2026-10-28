@@ -24,7 +24,6 @@ export default function ShowroomPage() {
   const { data: vehicles, isLoading } = useQuery({ queryKey: ['vehicles'], queryFn: () => api<VehicleWithState[]>('/api/v1/vehicles'), refetchInterval: 15000 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = vehicles?.find((v) => v.id === selectedId) ?? vehicles?.[0];
-  const [preset, setPreset] = useState('auto');
 
   if (isLoading) return <div className="flex h-64 items-center justify-center"><Spinner size={22} /></div>;
   if (!vehicles || vehicles.length === 0) {

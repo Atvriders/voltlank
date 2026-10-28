@@ -11,11 +11,6 @@ import { seededRng, hashString } from '../providers/types';
 const TICK_MS = 45_000;
 const MAX_FETCHES_PER_ACCOUNT_PER_MINUTE = 8;
 
-interface PollPlan {
-  accountId: string;
-  vehicles: { vehicleId: string; providerVehicleId: string }[];
-}
-
 export class PollingScheduler {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
@@ -142,7 +137,6 @@ export async function processTelemetryJob(payload: { accountId: string; vehicleI
     const msg = (err as Error).message;
     if (msg === 'vehicle_asleep') {
       // Mark last-known without an error.
-      const { ingestVehicleState } = await import('./ingest');
       const snap = vehicle.snapshot?.state as { freshness?: string } | null;
       if (snap) {
         await prisma.vehicleSnapshot.update({

@@ -76,7 +76,7 @@ export function openEnvelope(ciphertext: string): string {
   } catch {
     throw new Error('Invalid credential envelope');
   }
-  if (envl.v !== String(KEY_VERSION)) {
+  if (String(envl.v) !== String(KEY_VERSION)) {
     throw new Error(`Unsupported envelope key version ${envl.v} — rotate keys or restore the original master key.`);
   }
   const wiv = envl.wiv;

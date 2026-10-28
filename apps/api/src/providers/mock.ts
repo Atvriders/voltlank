@@ -28,7 +28,7 @@ class MockProviderImpl implements VehicleProvider {
     return { ok: true, checks: [{ name: 'Test mode', ok: true, detail: 'Mock provider serves scripted test data only.' }] };
   }
 
-  async listVehicles(ctx: ProviderContext): Promise<ProviderVehicleDescriptor[]> {
+  async listVehicles(_ctx: ProviderContext): Promise<ProviderVehicleDescriptor[]> {
     return [...scripts.keys()].map((id) => ({
       providerVehicleId: id,
       displayName: `Mock ${id}`,
@@ -55,7 +55,7 @@ class MockProviderImpl implements VehicleProvider {
     };
   }
 
-  async sendCommand(ctx: ProviderContext, providerVehicleId: string, type: CommandType, params: CommandParams): Promise<CommandDispatchResult> {
+  async sendCommand(_ctx: ProviderContext, providerVehicleId: string, type: CommandType, _params: CommandParams): Promise<CommandDispatchResult> {
     const s = scripts.get(providerVehicleId);
     if (!s) return { kind: 'rejected', errorMessage: 'Unknown mock vehicle.' };
     if (s.commands?.[type]) return s.commands[type];

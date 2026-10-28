@@ -4,9 +4,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, CalendarClock, CheckCircle2, Mail, Wrench } from 'lucide-react';
+import { Activity, CheckCircle2, Mail, Wrench } from 'lucide-react';
 import { api } from '../api/client';
-import { Badge, Button, Card, EmptyState, Field, Input, Spinner } from '../components/ui';
+import { Badge, Button, Card, EmptyState, Input, Spinner } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 import type { PublicStatus } from '@voltlink/shared';
 

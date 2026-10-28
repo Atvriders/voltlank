@@ -27,6 +27,16 @@ import { requireAuth } from './auth/middleware';
 import { getQueue } from './core/queue';
 import { APP_VERSION } from '@voltlink/shared';
 
+const OPENAPI_SPEC: string = (() => {
+  try {
+    const p = path.resolve(process.cwd(), 'openapi.json');
+    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+  } catch {
+    // fall through to the minimal stub
+  }
+  return JSON.stringify({ openapi: '3.1.0', info: { title: 'VoltLink API', version: APP_VERSION }, paths: {} });
+})();
+
 export function buildApp(opts: { serveSpa?: boolean } = {}): express.Express {
   const app = express();
   app.disable('x-powered-by');
@@ -62,6 +72,10 @@ export function buildApp(opts: { serveSpa?: boolean } = {}): express.Express {
     }),
   );
   app.use('/api', csrf);
+
+  app.get('/api/docs', (_req, res) => {
+    res.type('application/json').send(OPENAPI_SPEC);
+  });
 
   app.get('/healthz', (_req, res) => res.json({ ok: true, version: APP_VERSION, uptimeSec: Math.round(process.uptime()) }));
   app.get('/readyz', async (_req, res) => {

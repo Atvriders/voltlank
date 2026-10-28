@@ -4,11 +4,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, CalendarClock, ExternalLink, Plus, RefreshCw } from 'lucide-react';
+import { CalendarClock, ExternalLink, Plus, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
-import { Badge, Button, Card, Field, Input, Modal, Select, Spinner, Stat } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Select } from '../components/ui';
 import { fmtClock } from '../lib/format';
-import type { Incident, MaintenanceWindow, PublicStatus, StatusComponent, StatusCheckHistory } from '@voltlink/shared';
+import type { Incident, PublicStatus, StatusComponent, StatusCheckHistory } from '@voltlink/shared';
 
 const STATUS_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'info' | 'neutral'> = {
   operational: 'ok', degraded: 'warn', partial_outage: 'warn', major_outage: 'danger', maintenance: 'info', unknown: 'neutral',
@@ -16,7 +16,7 @@ const STATUS_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'info' | 'neutral'>
 
 export default function StatusAdminPage() {
   const qc = useQueryClient();
-  const { data: bundle, isLoading } = useQuery({ queryKey: ['public-status'], queryFn: () => api<PublicStatus>('/api/v1/status'), refetchInterval: 30000 });
+  const { data: bundle } = useQuery({ queryKey: ['public-status'], queryFn: () => api<PublicStatus>('/api/v1/status'), refetchInterval: 30000 });
   const { data: history } = useQuery({ queryKey: ['status-history'], queryFn: () => api<StatusCheckHistory[]>('/api/v1/status/checks/history?hours=24') });
   const [incidentOpen, setIncidentOpen] = useState(false);
   const [maintOpen, setMaintOpen] = useState(false);

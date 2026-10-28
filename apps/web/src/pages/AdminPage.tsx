@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertOctagon, Database, Power, RefreshCw, Users, Wrench } from 'lucide-react';
+import { AlertOctagon, Database, RefreshCw, Users } from 'lucide-react';
 import { api } from '../api/client';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Stat } from '../components/ui';
 import type { HealthInfo } from '@voltlink/shared';

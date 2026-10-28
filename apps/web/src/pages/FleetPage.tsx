@@ -9,7 +9,6 @@ import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner }
 import type { CostCenter, Department, Driver, FleetGroup, FleetVehicleRow, MaintenanceRecord, VehicleAssignment } from '@voltlink/shared';
 
 export default function FleetPage() {
-  const qc = useQueryClient();
   const [tab, setTab] = useState<'overview' | 'groups' | 'drivers' | 'maintenance'>('overview');
   const { data: overview, isLoading } = useQuery({ queryKey: ['fleet-overview'], queryFn: () => api<{ rows: FleetVehicleRow[]; summary: { vehicles: number; charging: number; offline: number; attention: number; avgBatteryPct: number | null } }>('/api/v1/fleet/overview'), refetchInterval: 20000 });
 

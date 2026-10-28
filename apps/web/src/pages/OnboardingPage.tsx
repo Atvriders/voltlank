@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Boxes, Car, Check, ChevronLeft, ChevronRight, FlaskConical, Lock, PlugZap, ShieldCheck, Sparkles } from 'lucide-react';
+import { Boxes, Check, ChevronLeft, ChevronRight, FlaskConical, Lock, PlugZap, ShieldCheck, Sparkles } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Badge, Button, Card, Field, ProgressBar, Select } from '../components/ui';
@@ -34,7 +34,6 @@ export default function OnboardingPage() {
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [retentionDays, setRetentionDays] = useState(365);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
-  const [zoneCreated, setZoneCreated] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('voltlink-onboarding', String(step));

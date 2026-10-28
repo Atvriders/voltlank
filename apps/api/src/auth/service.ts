@@ -1,7 +1,6 @@
 // VoltLink authentication service: accounts, email verification, password
 // reset, sessions, TOTP, passkeys (WebAuthn), and the dev/SMTP mailer.
 
-import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { authenticator } from 'otplib';

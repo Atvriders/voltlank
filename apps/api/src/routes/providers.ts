@@ -10,8 +10,10 @@ import { buildContext, connectDemoAccount, getProvider, removeCredentials, saveC
 import { env } from '../core/env';
 import { teslaAuthorizeUrl, teslaExchangeCode } from '../providers/tesla';
 import { seedDemoWorld } from '../telemetry/seed';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { ingestVehicleState } from '../telemetry/ingest';
 import { getQueue } from '../core/queue';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { validateWebhookUrl } from '../notifications/simpleWebhooks';
 
 export const providersRouter = Router();

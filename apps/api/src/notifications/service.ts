@@ -100,7 +100,7 @@ async function deliver(input: NotifyInput & { channel: DeliveryChannel; email: s
       try {
         const res = await fetch(ep.url, { method: 'POST', headers, body: JSON.stringify(payload) });
         await prisma.webhookEndpoint.update({ where: { id: ep.id }, data: { lastStatus: res.status, lastDeliveryAt: new Date() } });
-      } catch (err) {
+      } catch {
         await prisma.webhookEndpoint.update({ where: { id: ep.id }, data: { lastStatus: 0, lastDeliveryAt: new Date() } });
       }
     }

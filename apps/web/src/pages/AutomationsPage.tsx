@@ -3,11 +3,11 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FlaskConical, Play, Plus, Power, Trash2, Zap } from 'lucide-react';
+import { FlaskConical, Plus, Power, Trash2, Zap } from 'lucide-react';
 import { api } from '../api/client';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner } from '../components/ui';
 import { fmtClock } from '../lib/format';
-import { ACTION_TYPES, CONDITION_TYPES, TRIGGER_TYPES, type ActionType, type Automation, type AutomationExecution, type TriggerType } from '@voltlink/shared';
+import { ACTION_TYPES, TRIGGER_TYPES, type ActionType, type Automation, type AutomationExecution, type TriggerType } from '@voltlink/shared';
 
 const TRIGGER_LABELS: Record<string, string> = {
   scheduled: 'On schedule', enter_place: 'Entering a place', leave_place: 'Leaving a place',

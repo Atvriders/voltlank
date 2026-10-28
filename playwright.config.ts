@@ -16,6 +16,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile', use: { ...devices['Pixel 7'] } },
+    // Visual snapshots are desktop-only (mobile viewport coverage lives in the
+    // acceptance spec, which asserts layout on a Pixel 7 profile).
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, testIgnore: /visual\.spec\.ts/ },
   ],
 });

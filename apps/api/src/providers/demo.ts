@@ -3,7 +3,6 @@
 // fictional. Demo commands mutate overlays; the underlying simulation is a
 // pure function of time.
 
-import { prisma } from '../core/db';
 import { hashString, seededRng, type CommandDispatchResult, type FetchStateResult, type ProviderContext, type ProviderVehicleDescriptor, type VehicleProvider } from './types';
 import type { Capability, CommandParams, CommandType, VehicleState } from '@voltlink/shared';
 

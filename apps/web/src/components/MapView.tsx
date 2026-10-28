@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 import type maplibregl from 'maplibre-gl';
-import { circleGeoJson, createMap, routeGeoJson, type MapPoint } from '../lib/map';
+import { circleGeoJson, createMap, routeGeoJson } from '../lib/map';
 
 export interface MapLayer {
   id: string;
@@ -45,7 +45,7 @@ export default function MapView({
       const known = new Set<string>();
       for (const l of ls) {
         known.add(l.id);
-        let sourceId = `src-${l.id}`;
+        const sourceId = `src-${l.id}`;
         if (!map.getSource(sourceId)) {
           map.addSource(sourceId, { type: 'geojson', data: l.feature as never });
         } else {

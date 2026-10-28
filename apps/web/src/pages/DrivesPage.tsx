@@ -4,12 +4,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Filter, Gauge } from 'lucide-react';
+import { Download, Gauge } from 'lucide-react';
 import { api, apiCsv } from '../api/client';
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner } from '../components/ui';
-import { fmtClock, fmtDist, fmtDuration, fmtEnergy, fmtMoney } from '../lib/format';
+import { fmtClock, fmtDist, fmtDuration, fmtEnergy } from '../lib/format';
 import { useAuth } from '../auth/AuthContext';
-import type { Drive, DriveTotals } from '@voltlink/shared';
+import type { Drive } from '@voltlink/shared';
 
 export default function DrivesPage() {
   const { user } = useAuth();

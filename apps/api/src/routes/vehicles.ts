@@ -10,6 +10,7 @@ import { ingestVehicleState } from '../telemetry/ingest';
 import { getProvider } from '../providers/registry';
 import { buildContext } from '../providers/registry';
 import { getQueue } from '../core/queue';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { haversineKm } from '../core/geo';
 
 export const vehiclesRouter = Router();

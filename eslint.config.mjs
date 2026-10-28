@@ -13,6 +13,8 @@ export default tseslint.config(
       'node_modules/',
       'coverage/',
       'apps/web/public/',
+      'apps/api/web-dist/',
+      '**/web-dist/**',
       '**/dist/',
       '**/build/',
       '**/coverage/',
@@ -23,6 +25,10 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ['**/*.{js,mjs,cjs}'],
+    languageOptions: { globals: { ...globals.node, ...globals.es2022 } },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
@@ -52,6 +58,10 @@ export default tseslint.config(
       // Every rule that was enforced before eslint 10 remains enforced.
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/purity': 'off',
+      // R3F/MapLibre intentionally mutate refs inside useFrame/effects; the
+      // react-compiler advisory rules do not understand three.js patterns.
+      'react-hooks/refs': 'off',
+      'react-hooks/immutability': 'off',
     },
   },
   prettier,

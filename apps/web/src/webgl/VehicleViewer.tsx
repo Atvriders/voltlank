@@ -12,7 +12,7 @@
 //   cleanup, reduced-motion support.
 
 import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -37,8 +37,6 @@ export function autoPreset(): GraphicsPreset {
   return 'ultra';
 }
 
-const PART_GROUPS = ['doors', 'trunk', 'frunk', 'charge_port', 'wheels'] as const;
-
 function findPart(obj: THREE.Object3D, name: string): THREE.Object3D | null {
   if (obj.name === name || obj.name.toLowerCase().endsWith(name.toLowerCase())) return obj;
   for (const child of obj.children) {
@@ -48,7 +46,7 @@ function findPart(obj: THREE.Object3D, name: string): THREE.Object3D | null {
   return null;
 }
 
-function VehicleModel({ url, vehicle, state, preset, signal, onLoaded }: { url: string; vehicle: VehicleWithState; state: VehicleState | null; preset: GraphicsPreset; signal: { ok: boolean }; onLoaded?: () => void }) {
+function VehicleModel({ url, state, preset, signal, onLoaded }: { url: string; vehicle: VehicleWithState; state: VehicleState | null; preset: GraphicsPreset; signal: { ok: boolean }; onLoaded?: () => void }) {
   const gltf = useLoader(GLTFLoader, url);
   const ref = useRef<THREE.Group>(null);
   const stateRef = useRef(state);
@@ -126,7 +124,7 @@ function VehicleModel({ url, vehicle, state, preset, signal, onLoaded }: { url: 
     // Headlights
     if (map.headlights) {
       const on = !!(s.climateOn || s.status === 'driving' || s.flashLightsBlink);
-      map.headlights.visible = !!s.flashLightsBlink ? Math.sin(t * 14) > 0 : on;
+      map.headlights.visible = s.flashLightsBlink ? Math.sin(t * 14) > 0 : on;
     }
     if (map.taillights) {
       const brake = (s.speedKmh ?? 0) < 1 && s.status === 'online';

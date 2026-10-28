@@ -5,12 +5,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowRight, BatteryCharging, Bell, Car, Lock, LockOpen, RadioTower,
-  ShieldAlert, Snowflake, Zap,
+  ArrowRight, BatteryCharging, Bell, Car, Lock, LockOpen, RadioTower, ShieldAlert, Snowflake, Zap,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { Badge, Button, Card, EmptyState, ProgressBar, Spinner, Stat } from '../components/ui';
-import { batteryTone, fmtClock, fmtDist, fmtEnergy, fmtKm, fmtPower, fmtSpeed, fmtTemp, FRESHNESS_LABEL, STATUS_LABEL, timeAgo } from '../lib/format';
+import { fmtClock, fmtDist, fmtPower, fmtSpeed, fmtTemp, FRESHNESS_LABEL, STATUS_LABEL, timeAgo } from '../lib/format';
 import type { Automation, Drive, ProviderInfo, VehicleState, VehicleWithState } from '@voltlink/shared';
 import { useAuth } from '../auth/AuthContext';
 import { ChargingBadge } from '../components/Shell';
@@ -185,7 +184,6 @@ function ChargingBadgeX({ state }: { state?: VehicleState | null }) {
 function OverviewState({ state, units }: { state: VehicleState; units: 'metric' | 'imperial' }) {
   const fresh = (FRESHNESS_LABEL[state.freshness] ?? FRESHNESS_LABEL.last_known)!;
   const status = (STATUS_LABEL[state.status] ?? STATUS_LABEL.unknown)!;
-  const tone = state.batteryPercent && state.batteryPercent <= 20 ? 'danger' : state.chargingState === 'charging' ? 'charging' : 'accent';
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">

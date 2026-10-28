@@ -31,7 +31,6 @@ export async function pushSimpleWebhook(userId: string, channel: DeliveryChannel
 
   let payload: string;
   if (channel === 'ntfy') {
-    payload = JSON.stringify({ topic: url, title: msg.title, message: msg.body, priority: msg.severity === 'critical' ? 5 : 3, tags: ['voltlink'] });
     await fetch(url, { method: 'POST', body: msg.body, headers: { Title: msg.title, Priority: msg.severity === 'critical' ? '5' : '3', Tags: 'voltlink' } });
     return;
   }

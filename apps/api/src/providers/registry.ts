@@ -3,7 +3,7 @@
 import { prisma } from '../core/db';
 import { openJson, sealJson } from '../core/crypto';
 import { audit } from '../core/settings';
-import type { ProviderAccount, ProviderCredential } from '@prisma/client';
+import type { ProviderAccount } from '@prisma/client';
 import type { ProviderContext, VehicleProvider } from './types';
 import { DemoProvider } from './demo';
 import { MockProvider } from './mock';

@@ -1,10 +1,5 @@
-# Blank issues stay enabled: an operator with a half-diagnosed production
-# problem should never be blocked by a template.
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Security vulnerability (private)
-    url: https://github.com/Atvriders/ham-net-assistant/security/advisories/new
-    about: Never file a vulnerability as a public issue — report it privately. See SECURITY.md.
-  - name: Setup and operations questions
-    url: https://github.com/Atvriders/ham-net-assistant#readme
-    about: Install, environment variables, backup/restore, upgrade and troubleshooting are covered in the README.
+  - name: VoltLink docs
+    url: https://github.com/Atvriders/voltlank#documentation
+    about: Read the documentation before opening an issue.
